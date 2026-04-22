@@ -270,7 +270,7 @@
   <div class="sub">OpenCV for edge detection</div>
 </div>
 <footer>
-  <span>SCANNER // v0.3</span>
+  <span>SCANNER // v0.4</span>
   <span id="footer-status">Ready</span>
 </footer>
 
@@ -682,6 +682,39 @@ STRICT rules:
   return parsed;
 }
 
+/* Fallback: force a plain-text rich description when structured OCR returns nothing */
+async function describeImage(page) {
+  const ocrDataUrl = await prepareOcrImage(page);
+  const base64 = ocrDataUrl.split(',')[1];
+  const body = {
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 1500,
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
+        { type: "text", text:
+`Describe everything you can see in this image in rich, concrete detail. Even if the image is blurry, dim, angled, low-resolution, or hard to read, you must still provide useful output.
+
+Include:
+- What the image shows overall (subject, setting, context — e.g., "a phone photo of a laptop screen running Notepad++ with JavaScript code visible").
+- Any text, numbers, or symbols you can make out — even partial or uncertain ones. When unsure, guess and mark with (?).
+- Notable objects, colors, layout, visible UI elements.
+
+Respond in plain text. No JSON, no markdown fences, no preamble, no apology. Just the description.` }
+      ]
+    }]
+  };
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return '';
+  const data = await res.json();
+  return (data.content||[]).filter(x => x.type==='text').map(x => x.text).join('\n').trim();
+}
+
 /* log */
 function log(msg, kind='') {
   const el = $('proc-log');
@@ -749,12 +782,13 @@ function buildOutputs() {
       try { doc.text(lines, 20, 24, { renderingMode:'invisible' }); }
       catch (e) { doc.text(lines, 20, 24); }
     }
-    const header = `━━━ ${pageHeaderLabel(p, i)} ━━━`;
+    const header = `=== ${pageHeaderLabel(p, i)} ===`;
     combined += (i?'\n\n':'') + header + '\n\n' + body;
   });
 
   state.pdfBlob = doc.output('blob');
-  state.txtBlob = new Blob([combined], { type:'text/plain;charset=utf-8' });
+  // Prepend UTF-8 BOM so Android / Notepad / other viewers detect encoding correctly
+  state.txtBlob = new Blob(['\uFEFF' + combined], { type:'text/plain;charset=utf-8' });
   state.allText = combined;
   state.pdfStats = {
     pages: state.pages.length, words: totalWords, chars: totalChars,
@@ -777,19 +811,31 @@ async function process() {
     try {
       let structured = await ocrPage(page);
       // retry once if result is suspiciously empty
-      const isEmpty = !structured.plain_text && !structured.description && !structured.blocks.length;
+      let isEmpty = !structured.plain_text && !structured.description && !structured.blocks.length;
       if (isEmpty) {
         log(`Page ${done+1} · empty result, retrying…`);
         structured = await ocrPage(page);
+        isEmpty = !structured.plain_text && !structured.description && !structured.blocks.length;
+      }
+      // final fallback: force a rich plain-text description
+      if (isEmpty) {
+        log(`Page ${done+1} · running describe-image fallback…`);
+        const desc = await describeImage(page);
+        if (desc) {
+          structured.description = desc;
+          structured.has_text = false;
+          structured.content_type = structured.content_type || 'other';
+          structured.title = structured.title || 'Image description';
+        }
       }
       page.structured = structured;
       page.text = structured.plain_text || '';
       page.status = 'done';
       const wc = (structured.plain_text || '').split(/\s+/).filter(Boolean).length;
       const kind = structured.content_type || 'content';
-      const hint = structured.has_text
+      const hint = structured.has_text && wc
         ? `${wc} words`
-        : (structured.description ? 'scene described' : 'no content');
+        : (structured.description ? 'described' : 'empty');
       log(`Page ${done+1} ✓ ${kind} · ${hint} · ${structured.language||'und'}`, 'ok');
     } catch (err) {
       console.error(err); page.text = ''; page.status = 'error';
@@ -812,7 +858,7 @@ async function process() {
     state.pages.forEach((p, i) => {
       const hdr = document.createElement('div');
       hdr.className = 'pagebreak';
-      hdr.textContent = '◆ ' + pageHeaderLabel(p, i);
+      hdr.textContent = '=== ' + pageHeaderLabel(p, i) + ' ===';
       preview.appendChild(hdr);
       const body = document.createElement('div');
       const t = pageBodyText(p);

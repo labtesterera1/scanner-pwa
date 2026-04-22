@@ -135,6 +135,34 @@
   .spinner { width: 32px; height: 32px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* settings */
+  .settings-btn { margin-top: 6px; background: transparent; border: 1px solid var(--line-2); color: var(--text-muted); width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; padding: 0; transition: all 0.15s; }
+  .settings-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); z-index: 300; display: none; align-items: center; justify-content: center; padding: 20px; }
+  .modal-backdrop.open { display: flex; animation: fadeIn 0.2s ease; }
+  .modal { background: var(--bg-2); border: 1px solid var(--line-2); max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative; }
+  .modal::before, .modal::after { content: ""; position: absolute; width: 16px; height: 16px; border: 1px solid var(--accent); }
+  .modal::before { top: 8px; left: 8px; border-right: none; border-bottom: none; }
+  .modal::after { bottom: 8px; right: 8px; border-left: none; border-top: none; }
+  .modal-head { padding: 18px 22px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+  .modal-head h3 { font-family: var(--serif); font-size: 22px; font-weight: 400; }
+  .modal-head .close-btn { background: transparent; border: none; color: var(--text-muted); font-size: 22px; cursor: pointer; padding: 0 4px; line-height: 1; }
+  .modal-head .close-btn:hover { color: var(--danger); }
+  .modal-body { padding: 20px 22px; }
+  .modal-body label { display: block; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; margin-top: 14px; }
+  .modal-body label:first-child { margin-top: 0; }
+  .modal-body input { width: 100%; font-family: var(--mono); font-size: 12px; background: var(--surface); border: 1px solid var(--line-2); color: var(--text); padding: 10px 12px; outline: none; transition: border-color 0.15s; }
+  .modal-body input:focus { border-color: var(--accent); }
+  .modal-body .hint { font-size: 10px; color: var(--text-muted); margin-top: 5px; line-height: 1.5; }
+  .modal-body .notice { margin-top: 18px; padding: 12px 14px; background: var(--surface); border-left: 2px solid var(--warn); font-size: 11px; color: var(--text-muted); line-height: 1.6; }
+  .modal-body .notice b { color: var(--warn); font-weight: 600; }
+  .modal-body .notice ul { margin: 6px 0 0 18px; }
+  .modal-body .notice code { background: var(--bg); padding: 1px 4px; color: var(--accent); font-size: 10px; }
+  .modal-foot { padding: 14px 22px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 10px; }
+  .connection-badge { display: inline-block; font-size: 9px; padding: 2px 6px; border: 1px solid var(--line-2); color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; margin-left: 6px; vertical-align: middle; }
+  .connection-badge.proxy { border-color: var(--accent-dim); color: var(--accent); }
+  .connection-badge.key { border-color: var(--warn); color: var(--warn); }
+
   @media (max-width: 520px) {
     .brand { font-size: 34px; }
     .statusbar { grid-template-columns: repeat(2, 1fr); }
@@ -151,6 +179,7 @@
     <div class="meta">
       <div><span class="dot"></span>System ready</div>
       <div id="clock" style="margin-top:4px">--:--:--</div>
+      <button class="settings-btn" id="btn-settings" title="Connection settings">⚙</button>
     </div>
   </header>
 
@@ -264,13 +293,45 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="modal-backdrop" id="settings-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Connection <span class="connection-badge" id="conn-badge">ARTIFACT</span></h3>
+      <button class="close-btn" id="btn-close-settings">×</button>
+    </div>
+    <div class="modal-body">
+      <label>API endpoint</label>
+      <input id="cfg-endpoint" placeholder="https://api.anthropic.com/v1/messages" />
+      <div class="hint">Leave as default when testing inside the Claude.ai artifact preview (calls are proxied automatically). For standalone / downloaded use, either: (a) paste your Anthropic API key below, or (b) set this to your own proxy URL.</div>
+
+      <label>Anthropic API key <span style="color:var(--text-dim);text-transform:none;letter-spacing:0">(optional)</span></label>
+      <input id="cfg-key" type="password" placeholder="sk-ant-..." autocomplete="off" />
+      <div class="hint">Stored only for this browser session. Sent as <code style="background:var(--bg);padding:1px 4px;color:var(--accent)">x-api-key</code> header. Only fill this if you're running outside the Claude.ai artifact preview.</div>
+
+      <div class="notice">
+        <b>Seeing "Failed to fetch"?</b><br/>
+        The Anthropic API can't be called directly from a browser without proper headers. Your options:
+        <ul>
+          <li>Run this inside the Claude.ai <b>artifact preview</b> (no setup)</li>
+          <li>Paste your API key above (uses <code>anthropic-dangerous-direct-browser-access</code>)</li>
+          <li>Deploy a proxy and put its URL in "API endpoint"</li>
+        </ul>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="btn-cancel-settings">Cancel</button>
+      <button class="btn primary" id="btn-save-settings">Save</button>
+    </div>
+  </div>
+</div>
 <div class="loader-overlay" id="loader">
   <div class="spinner"></div>
   <div class="title">Loading vision engine</div>
   <div class="sub">OpenCV for edge detection</div>
 </div>
 <footer>
-  <span>SCANNER // v0.4</span>
+  <span>SCANNER // v0.5</span>
   <span id="footer-status">Ready</span>
 </footer>
 
@@ -282,6 +343,8 @@
 const state = {
   pages: [], stream: null, pdfBlob: null, txtBlob: null, allText: '',
   pdfStats: null, currentFilter: 'original', edgeQuad: null, edgeLoopId: null, cvReady: false,
+  apiEndpoint: 'https://api.anthropic.com/v1/messages',
+  apiKey: '',
 };
 const $ = id => document.getElementById(id);
 const sections = ['idle','camera','review','processing','done'];
@@ -302,6 +365,63 @@ function updateClock() {
   $('clock').textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 setInterval(updateClock, 1000); updateClock();
+
+/* Config management */
+const DEFAULT_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+function loadConfig() {
+  try {
+    const raw = sessionStorage.getItem('scanner_cfg');
+    if (raw) {
+      const cfg = JSON.parse(raw);
+      state.apiEndpoint = cfg.endpoint || DEFAULT_ENDPOINT;
+      state.apiKey = cfg.key || '';
+    }
+  } catch (e) { /* ignore */ }
+  updateConnectionBadge();
+}
+function saveConfig() {
+  try {
+    sessionStorage.setItem('scanner_cfg', JSON.stringify({
+      endpoint: state.apiEndpoint, key: state.apiKey,
+    }));
+  } catch (e) { /* ignore */ }
+}
+function updateConnectionBadge() {
+  const b = $('conn-badge'); if (!b) return;
+  const isDefault = state.apiEndpoint === DEFAULT_ENDPOINT;
+  if (!isDefault) { b.textContent = 'PROXY'; b.className = 'connection-badge proxy'; }
+  else if (state.apiKey) { b.textContent = 'API KEY'; b.className = 'connection-badge key'; }
+  else { b.textContent = 'ARTIFACT'; b.className = 'connection-badge'; }
+}
+
+/* Unified Claude API caller with helpful error handling */
+async function callClaude(body) {
+  const headers = { "Content-Type": "application/json" };
+  if (state.apiKey) {
+    headers["x-api-key"] = state.apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+    headers["anthropic-dangerous-direct-browser-access"] = "true";
+  }
+  let res;
+  try {
+    res = await fetch(state.apiEndpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch (netErr) {
+    // TypeError: Failed to fetch = network/CORS/blocked
+    throw new Error('Network/CORS blocked — open ⚙ Settings and add an API key or proxy URL');
+  }
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    if (res.status === 401) throw new Error('401 Unauthorized — check API key in ⚙ Settings');
+    if (res.status === 403) throw new Error('403 Forbidden — API key lacks permission');
+    if (res.status === 429) throw new Error('429 Rate limit — wait a moment and retry');
+    throw new Error(`API ${res.status}: ${errText.slice(0,140)}`);
+  }
+  return await res.json();
+}
 
 function updatePageCount() {
   $('stat-pages').textContent = String(state.pages.length).padStart(2,'0');
@@ -654,16 +774,7 @@ STRICT rules:
       ]
     }]
   };
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '');
-    throw new Error(`API ${res.status}: ${errText.slice(0,160)}`);
-  }
-  const data = await res.json();
+  const data = await callClaude(body);
   const raw = (data.content||[]).filter(x => x.type==='text').map(x => x.text).join('\n').trim();
   let parsed;
   try {
@@ -705,14 +816,12 @@ Respond in plain text. No JSON, no markdown fences, no preamble, no apology. Jus
       ]
     }]
   };
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) return '';
-  const data = await res.json();
-  return (data.content||[]).filter(x => x.type==='text').map(x => x.text).join('\n').trim();
+  try {
+    const data = await callClaude(body);
+    return (data.content||[]).filter(x => x.type==='text').map(x => x.text).join('\n').trim();
+  } catch (e) {
+    return '';
+  }
 }
 
 /* log */
@@ -910,6 +1019,25 @@ $('btn-restart').addEventListener('click', () => {
 });
 document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => applyFilterToAll(c.dataset.filter)));
 
+/* Settings modal */
+function openSettings() {
+  $('cfg-endpoint').value = state.apiEndpoint === DEFAULT_ENDPOINT ? '' : state.apiEndpoint;
+  $('cfg-key').value = state.apiKey;
+  $('settings-modal').classList.add('open');
+}
+function closeSettings() { $('settings-modal').classList.remove('open'); }
+$('btn-settings').addEventListener('click', openSettings);
+$('btn-close-settings').addEventListener('click', closeSettings);
+$('btn-cancel-settings').addEventListener('click', closeSettings);
+$('btn-save-settings').addEventListener('click', () => {
+  state.apiEndpoint = ($('cfg-endpoint').value || '').trim() || DEFAULT_ENDPOINT;
+  state.apiKey = ($('cfg-key').value || '').trim();
+  saveConfig(); updateConnectionBadge(); closeSettings();
+  toast('Settings saved');
+});
+$('settings-modal').addEventListener('click', (e) => { if (e.target.id === 'settings-modal') closeSettings(); });
+
+loadConfig();
 updatePageCount();
 </script>
 </body>

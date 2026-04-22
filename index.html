@@ -2,638 +2,149 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>SCANNER // instrument</title>
-
-<!-- PWA Meta Tags -->
-<meta name="application-name" content="Scanner Agent" />
-<meta name="description" content="Scan documents with your camera. Text extracted via Claude Vision into searchable PDF." />
-<meta name="mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Scanner" />
-<meta name="theme-color" content="#d4ff3a" media="(prefers-color-scheme: light)" />
-<meta name="theme-color" content="#0c0b09" />
-<meta name="msapplication-TileColor" content="#0c0b09" />
-<meta name="msapplication-TileImage" content="icons/icon-144.png" />
-
-<!-- Manifest -->
-<link rel="manifest" href="manifest.json" />
-
-<!-- Apple Touch Icons -->
-<link rel="apple-touch-icon" href="icons/icon-192.png" />
-<link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png" />
-<link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png" />
-
-<!-- Favicon fallback -->
-<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-96.png" />
-
-<!-- Fonts -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>SCANNER / / instrument</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
-
 <style>
   :root {
-    --bg: #0c0b09;
-    --bg-2: #121110;
-    --surface: #1a1815;
-    --surface-2: #232018;
-    --line: #2b2721;
-    --line-2: #3a3529;
-    --text: #ece8de;
-    --text-muted: #8a857a;
-    --text-dim: #56524a;
-    --accent: #d4ff3a;
-    --accent-dim: #9fc21a;
-    --danger: #ff6b4a;
-    --warn: #ffb340;
+    --bg: #0c0b09; --bg-2: #121110; --surface: #1a1815; --surface-2: #232018;
+    --line: #2b2721; --line-2: #3a3529;
+    --text: #ece8de; --text-muted: #8a857a; --text-dim: #56524a;
+    --accent: #d4ff3a; --accent-dim: #9fc21a; --danger: #ff6b4a; --warn: #ffb340;
     --serif: "Instrument Serif", Georgia, serif;
     --mono: "JetBrains Mono", ui-monospace, monospace;
-    --safe-top: env(safe-area-inset-top, 0px);
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
-    --safe-left: env(safe-area-inset-left, 0px);
-    --safe-right: env(safe-area-inset-right, 0px);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
-    min-height: 100vh;
-    /* Prevent pull-to-refresh on Android */
-    overscroll-behavior-y: contain;
-    /* Prevent text selection on tap-hold */
-    -webkit-user-select: none;
-    user-select: none;
-  }
-  /* Allow text selection only in proc-log / text output areas */
-  .proc-log, .done-box { -webkit-user-select: text; user-select: text; }
+  html, body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; overflow-x: hidden; min-height: 100vh; }
+  body::before { content: ""; position: fixed; inset: 0; background-image: repeating-linear-gradient(0deg, transparent 0, transparent 40px, rgba(255,255,255,0.01) 40px, rgba(255,255,255,0.01) 41px), repeating-linear-gradient(90deg, transparent 0, transparent 40px, rgba(255,255,255,0.01) 40px, rgba(255,255,255,0.01) 41px); pointer-events: none; z-index: 0; }
+  #app { position: relative; z-index: 1; max-width: 820px; margin: 0 auto; padding: 20px 18px 120px; min-height: 100vh; }
 
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background-image:
-      repeating-linear-gradient(0deg, transparent 0, transparent 40px, rgba(255,255,255,0.01) 40px, rgba(255,255,255,0.01) 41px),
-      repeating-linear-gradient(90deg, transparent 0, transparent 40px, rgba(255,255,255,0.01) 40px, rgba(255,255,255,0.01) 41px);
-    pointer-events: none;
-    z-index: 0;
-  }
-  #app {
-    position: relative;
-    z-index: 1;
-    max-width: 820px;
-    margin: 0 auto;
-    /* Account for notch / status bar on Android */
-    padding: calc(20px + var(--safe-top)) 18px calc(120px + var(--safe-bottom));
-    padding-left: calc(18px + var(--safe-left));
-    padding-right: calc(18px + var(--safe-right));
-    min-height: 100vh;
-  }
-
-  /* ── Install Banner ─────────────────────────────────────── */
-  #install-banner {
-    display: none;
-    align-items: center;
-    gap: 10px;
-    background: var(--surface-2);
-    border: 1px solid var(--accent-dim);
-    padding: 10px 14px;
-    margin-bottom: 18px;
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    animation: fadeIn 0.3s ease;
-  }
-  #install-banner.visible { display: flex; }
-  #install-banner .ib-text { flex: 1; color: var(--text-muted); }
-  #install-banner .ib-text strong { color: var(--accent); display: block; margin-bottom: 2px; }
-  #install-banner .ib-btn {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 600;
-    padding: 8px 14px;
-    background: var(--accent);
-    color: #0c0b09;
-    border: none;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    white-space: nowrap;
-  }
-  #install-banner .ib-close {
-    background: none;
-    border: none;
-    color: var(--text-dim);
-    cursor: pointer;
-    font-size: 16px;
-    padding: 2px 4px;
-  }
-
-  /* header */
-  header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    padding-bottom: 18px;
-    border-bottom: 1px solid var(--line);
-    margin-bottom: 22px;
-  }
-  .brand {
-    font-family: var(--serif);
-    font-size: 42px;
-    line-height: 0.9;
-    letter-spacing: -0.02em;
-  }
+  header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 18px; border-bottom: 1px solid var(--line); margin-bottom: 22px; }
+  .brand { font-family: var(--serif); font-size: 42px; line-height: 0.9; letter-spacing: -0.02em; }
   .brand em { color: var(--accent); font-style: italic; }
-  .meta {
-    text-align: right;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-muted);
-  }
-  .meta .dot {
-    display: inline-block;
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 8px var(--accent);
-    margin-right: 6px;
-    animation: pulse 2s ease-in-out infinite;
-    vertical-align: middle;
-  }
+  .meta { text-align: right; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+  .meta .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); margin-right: 6px; animation: pulse 2s ease-in-out infinite; vertical-align: middle; }
   @keyframes pulse { 50% { opacity: 0.35; } }
 
-  /* status bar */
-  .statusbar {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1px;
-    background: var(--line);
-    border: 1px solid var(--line);
-    margin-bottom: 22px;
-  }
-  .statusbar .cell {
-    background: var(--bg-2);
-    padding: 10px 12px;
-  }
-  .statusbar .label {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--text-dim);
-    margin-bottom: 4px;
-  }
-  .statusbar .value {
-    font-size: 14px;
-    color: var(--text);
-    font-weight: 500;
-  }
+  .statusbar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); margin-bottom: 22px; }
+  .statusbar .cell { background: var(--bg-2); padding: 10px 12px; }
+  .statusbar .label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-dim); margin-bottom: 4px; }
+  .statusbar .value { font-size: 14px; color: var(--text); font-weight: 500; }
   .statusbar .value.acc { color: var(--accent); }
 
-  /* sections */
   section { display: none; }
   section.active { display: block; animation: fadeIn 0.3s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
-  /* idle */
-  .idle-hero {
-    padding: 60px 20px 40px;
-    text-align: center;
-    border: 1px solid var(--line);
-    background:
-      radial-gradient(ellipse at top, rgba(212,255,58,0.04), transparent 60%),
-      var(--bg-2);
-    position: relative;
-    overflow: hidden;
-  }
-  .idle-hero::before,
-  .idle-hero::after {
-    content: "";
-    position: absolute;
-    width: 20px; height: 20px;
-    border: 1px solid var(--accent);
-  }
+  .idle-hero { padding: 60px 20px 40px; text-align: center; border: 1px solid var(--line); background: radial-gradient(ellipse at top, rgba(212,255,58,0.04), transparent 60%), var(--bg-2); position: relative; overflow: hidden; }
+  .idle-hero::before, .idle-hero::after { content: ""; position: absolute; width: 20px; height: 20px; border: 1px solid var(--accent); }
   .idle-hero::before { top: 10px; left: 10px; border-right: none; border-bottom: none; }
   .idle-hero::after { bottom: 10px; right: 10px; border-left: none; border-top: none; }
-  .idle-title {
-    font-family: var(--serif);
-    font-size: 34px;
-    line-height: 1.05;
-    margin-bottom: 8px;
-  }
+  .idle-title { font-family: var(--serif); font-size: 34px; line-height: 1.05; margin-bottom: 8px; }
   .idle-title em { color: var(--accent); font-style: italic; }
-  .idle-sub {
-    color: var(--text-muted);
-    margin-bottom: 32px;
-    font-size: 12px;
-    letter-spacing: 0.04em;
-  }
+  .idle-sub { color: var(--text-muted); margin-bottom: 32px; font-size: 12px; letter-spacing: 0.04em; }
+  .idle-features { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; font-size: 10px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 24px; }
+  .idle-features span::before { content: "▸ "; color: var(--accent); }
 
-  /* buttons */
-  .btn {
-    font-family: var(--mono);
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 14px 22px;
-    border: 1px solid var(--line-2);
-    background: var(--surface);
-    color: var(--text);
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    transition: all 0.15s;
-    position: relative;
-    /* Larger touch targets for mobile */
-    min-height: 48px;
-    touch-action: manipulation;
-  }
+  .btn { font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; padding: 14px 22px; border: 1px solid var(--line-2); background: var(--surface); color: var(--text); cursor: pointer; display: inline-flex; align-items: center; gap: 10px; transition: all 0.15s; position: relative; }
   .btn:hover { border-color: var(--accent); color: var(--accent); }
   .btn:active { transform: translateY(1px); }
   .btn:disabled { opacity: 0.35; cursor: not-allowed; }
-  .btn:disabled:hover { border-color: var(--line-2); color: var(--text); }
-  .btn.primary {
-    background: var(--accent);
-    color: #0c0b09;
-    border-color: var(--accent);
-    font-weight: 600;
-  }
+  .btn.primary { background: var(--accent); color: #0c0b09; border-color: var(--accent); font-weight: 600; }
   .btn.primary:hover { background: #e1ff5c; color: #0c0b09; border-color: #e1ff5c; }
-  .btn.danger { color: var(--danger); border-color: #4a2a25; }
-  .btn.danger:hover { border-color: var(--danger); color: var(--danger); background: #1c0f0c; }
   .btn.ghost { background: transparent; }
 
-  /* camera */
-  .camera-wrap {
-    position: relative;
-    background: #000;
-    border: 1px solid var(--line);
-    overflow: hidden;
-    aspect-ratio: 3 / 4;
-    max-height: 70vh;
-  }
-  #video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-  .viewfinder {
-    position: absolute;
-    inset: 24px;
-    pointer-events: none;
-  }
-  .corner {
-    position: absolute;
-    width: 28px; height: 28px;
-    border: 2px solid var(--accent);
-    filter: drop-shadow(0 0 4px rgba(212,255,58,0.4));
-  }
+  .camera-wrap { position: relative; background: #000; border: 1px solid var(--line); overflow: hidden; aspect-ratio: 3 / 4; max-height: 70vh; }
+  #video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #edge-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .viewfinder { position: absolute; inset: 24px; pointer-events: none; }
+  .corner { position: absolute; width: 28px; height: 28px; border: 2px solid var(--accent); filter: drop-shadow(0 0 4px rgba(212,255,58,0.4)); }
   .corner.tl { top: 0; left: 0; border-right: none; border-bottom: none; }
   .corner.tr { top: 0; right: 0; border-left: none; border-bottom: none; }
   .corner.bl { bottom: 0; left: 0; border-right: none; border-top: none; }
   .corner.br { bottom: 0; right: 0; border-left: none; border-top: none; }
-  .scanline {
-    position: absolute;
-    left: 24px; right: 24px;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    animation: scan 3s ease-in-out infinite;
-  }
-  @keyframes scan {
-    0%, 100% { top: 24px; opacity: 0; }
-    10% { opacity: 0.8; }
-    50% { top: calc(100% - 24px); opacity: 0.8; }
-    60% { opacity: 0; }
-  }
-  .camera-overlay-top {
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    padding: 12px 16px;
-    background: linear-gradient(180deg, rgba(0,0,0,0.7), transparent);
-    color: var(--text);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    display: flex;
-    justify-content: space-between;
-  }
-  .camera-overlay-bottom {
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    padding: 20px;
-    background: linear-gradient(0deg, rgba(0,0,0,0.7), transparent);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 20px;
-  }
-  .shutter {
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    border: 3px solid var(--accent);
-    background: var(--accent);
-    cursor: pointer;
-    position: relative;
-    transition: transform 0.1s;
-    touch-action: manipulation;
-  }
+  .scanline { position: absolute; left: 24px; right: 24px; height: 1px; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: scan 3s ease-in-out infinite; }
+  @keyframes scan { 0%, 100% { top: 24px; opacity: 0; } 10% { opacity: 0.8; } 50% { top: calc(100% - 24px); opacity: 0.8; } 60% { opacity: 0; } }
+  .camera-overlay-top { position: absolute; top: 0; left: 0; right: 0; padding: 12px 16px; background: linear-gradient(180deg, rgba(0,0,0,0.7), transparent); color: var(--text); font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; display: flex; justify-content: space-between; }
+  .camera-overlay-bottom { position: absolute; bottom: 0; left: 0; right: 0; padding: 20px; background: linear-gradient(0deg, rgba(0,0,0,0.7), transparent); display: flex; justify-content: center; align-items: center; gap: 20px; }
+  .shutter { width: 68px; height: 68px; border-radius: 50%; border: 3px solid var(--accent); background: var(--accent); cursor: pointer; position: relative; transition: transform 0.1s; }
   .shutter:active { transform: scale(0.92); }
-  .shutter::after {
-    content: "";
-    position: absolute;
-    inset: 4px;
-    border-radius: 50%;
-    border: 2px solid #0c0b09;
-  }
-  .camera-side-btn {
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    border: 1px solid var(--line-2);
-    background: rgba(0,0,0,0.4);
-    color: var(--text);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    backdrop-filter: blur(4px);
-    touch-action: manipulation;
-  }
+  .shutter::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; border: 2px solid #0c0b09; }
+  .camera-side-btn { width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--line-2); background: rgba(0,0,0,0.4); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; backdrop-filter: blur(4px); }
   .camera-side-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .edge-badge { position: absolute; top: 48px; right: 16px; font-size: 9px; padding: 4px 8px; border: 1px solid var(--accent-dim); color: var(--accent); background: rgba(0,0,0,0.6); letter-spacing: 0.1em; text-transform: uppercase; }
+  .edge-badge.off { border-color: var(--text-dim); color: var(--text-dim); }
 
-  /* review grid */
-  .section-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    margin-bottom: 16px;
-  }
-  .section-head h2 {
-    font-family: var(--serif);
-    font-size: 28px;
-    line-height: 1;
-    font-weight: 400;
-  }
-  .section-head .count {
-    color: var(--text-muted);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-  }
-  .pages-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 12px;
-    margin-bottom: 22px;
-  }
-  .page-card {
-    position: relative;
-    aspect-ratio: 3 / 4;
-    border: 1px solid var(--line);
-    background: var(--surface);
-    overflow: hidden;
-    cursor: pointer;
-  }
-  .page-card img {
-    width: 100%; height: 100%; object-fit: cover; display: block;
-  }
-  .page-card .pagenum {
-    position: absolute;
-    top: 6px; left: 6px;
-    font-size: 9px;
-    background: rgba(0,0,0,0.8);
-    color: var(--accent);
-    padding: 3px 6px;
-    letter-spacing: 0.12em;
-    border: 1px solid var(--accent-dim);
-  }
-  .page-card .remove {
-    position: absolute;
-    top: 6px; right: 6px;
-    width: 28px; height: 28px;
-    border-radius: 50%;
-    background: rgba(0,0,0,0.8);
-    border: 1px solid #4a2a25;
-    color: var(--danger);
-    font-size: 14px;
-    line-height: 1;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    touch-action: manipulation;
-  }
-  .page-card .remove:hover { background: var(--danger); color: #0c0b09; border-color: var(--danger); }
-  .page-card .status {
-    position: absolute;
-    bottom: 6px; left: 6px; right: 6px;
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    padding: 4px 6px;
-    background: rgba(0,0,0,0.8);
-    border-left: 2px solid var(--text-dim);
-    z-index: 2;
-  }
-  .page-card .status.done { border-left-color: var(--accent); color: var(--accent); }
-  .page-card .status.err { border-left-color: var(--danger); color: var(--danger); }
-  .page-card .status.run { border-left-color: var(--warn); color: var(--warn); }
-  .page-card .status.run::before {
-    content: "";
-    display: inline-block;
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--warn);
-    margin-right: 5px;
-    animation: pulse 0.8s ease-in-out infinite;
-  }
+  .section-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px; }
+  .section-head h2 { font-family: var(--serif); font-size: 28px; line-height: 1; font-weight: 400; }
+  .section-head .count { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; }
 
-  /* actions row */
-  .actions {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
+  .pages-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .page-card { position: relative; aspect-ratio: 3 / 4; border: 1px solid var(--line); background: var(--surface); overflow: hidden; cursor: grab; user-select: none; transition: border-color 0.15s, transform 0.15s; }
+  .page-card:hover { border-color: var(--line-2); }
+  .page-card.dragging { opacity: 0.4; cursor: grabbing; }
+  .page-card.drag-over { border-color: var(--accent); transform: scale(1.02); }
+  .page-card img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+  .page-card .pagenum { position: absolute; top: 6px; left: 6px; font-size: 9px; background: rgba(0,0,0,0.85); color: var(--accent); padding: 3px 6px; letter-spacing: 0.12em; border: 1px solid var(--accent-dim); }
+  .page-tools { position: absolute; top: 6px; right: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .page-tools button { width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,0.85); border: 1px solid var(--line-2); color: var(--text); font-size: 12px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+  .page-tools button:hover { border-color: var(--accent); color: var(--accent); }
+  .page-tools button.remove { color: var(--danger); border-color: #4a2a25; }
+  .page-tools button.remove:hover { background: var(--danger); color: #0c0b09; border-color: var(--danger); }
 
-  /* processing */
-  .proc-box {
-    border: 1px solid var(--line);
-    background: var(--bg-2);
-    padding: 24px;
-  }
-  .proc-log {
-    font-size: 11px;
-    max-height: 240px;
-    overflow-y: auto;
-    margin-top: 18px;
-    padding: 12px;
-    background: #08070680;
-    border: 1px solid var(--line);
-  }
-  .proc-log .line {
-    padding: 2px 0;
-    color: var(--text-muted);
-  }
+  .filter-bar { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; padding: 10px; border: 1px solid var(--line); background: var(--bg-2); }
+  .filter-bar .label { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); align-self: center; padding: 0 8px; }
+  .chip { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 6px 10px; border: 1px solid var(--line-2); background: var(--surface); color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+  .chip:hover { color: var(--text); border-color: var(--line-2); }
+  .chip.active { border-color: var(--accent); color: var(--accent); background: rgba(212,255,58,0.08); }
+
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .proc-box { border: 1px solid var(--line); background: var(--bg-2); padding: 24px; }
+  .proc-log { font-family: var(--mono); font-size: 11px; max-height: 240px; overflow-y: auto; margin-top: 18px; padding: 12px; background: #08070680; border: 1px solid var(--line); }
+  .proc-log .line { padding: 2px 0; color: var(--text-muted); }
   .proc-log .line .t { color: var(--text-dim); margin-right: 8px; }
   .proc-log .line.ok { color: var(--accent); }
   .proc-log .line.err { color: var(--danger); }
-  .progress {
-    height: 2px;
-    background: var(--line);
-    margin-top: 16px;
-    overflow: hidden;
-  }
-  .progress .bar {
-    height: 100%;
-    background: var(--accent);
-    width: 0%;
-    transition: width 0.3s;
-    box-shadow: 0 0 8px var(--accent);
-  }
+  .progress { height: 2px; background: var(--line); margin-top: 16px; overflow: hidden; }
+  .progress .bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; box-shadow: 0 0 8px var(--accent); }
 
-  /* done */
-  .done-box {
-    text-align: center;
-    padding: 48px 24px;
-    border: 1px solid var(--line);
-    background: var(--bg-2);
-    position: relative;
-  }
-  .done-mark {
-    font-family: var(--serif);
-    font-size: 64px;
-    color: var(--accent);
-    line-height: 1;
-    margin-bottom: 12px;
-  }
-  .done-title {
-    font-family: var(--serif);
-    font-size: 28px;
-    margin-bottom: 6px;
-  }
-  .done-stats {
-    display: flex;
-    gap: 24px;
-    justify-content: center;
-    margin: 24px 0;
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
+  .done-box { text-align: center; padding: 48px 24px; border: 1px solid var(--line); background: var(--bg-2); position: relative; }
+  .done-mark { font-family: var(--serif); font-size: 64px; color: var(--accent); line-height: 1; margin-bottom: 12px; }
+  .done-title { font-family: var(--serif); font-size: 28px; margin-bottom: 6px; }
+  .done-stats { display: flex; gap: 24px; justify-content: center; margin: 24px 0; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; flex-wrap: wrap; }
   .done-stats .stat { color: var(--text-muted); }
   .done-stats .stat b { color: var(--text); display: block; font-size: 20px; font-family: var(--serif); margin-top: 2px; }
 
-  footer {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    padding: 10px 18px;
-    /* respect Android nav bar */
-    padding-bottom: calc(10px + var(--safe-bottom));
-    background: rgba(12,11,9,0.9);
-    backdrop-filter: blur(8px);
-    border-top: 1px solid var(--line);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    display: flex;
-    justify-content: space-between;
-    z-index: 10;
-  }
+  .preview-text { margin-top: 24px; text-align: left; border: 1px solid var(--line); background: #08070680; padding: 16px; max-height: 280px; overflow-y: auto; font-size: 12px; line-height: 1.6; white-space: pre-wrap; font-family: var(--mono); color: var(--text); }
+  .preview-text .pagebreak { color: var(--accent); font-size: 10px; letter-spacing: 0.14em; margin: 16px 0 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+  .preview-text .pagebreak:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 
-  .toast {
-    position: fixed;
-    bottom: 70px; left: 50%;
-    transform: translateX(-50%);
-    background: var(--surface-2);
-    border: 1px solid var(--line-2);
-    padding: 10px 16px;
-    font-size: 11px;
-    color: var(--text);
-    z-index: 100;
-    opacity: 0;
-    transition: opacity 0.2s;
-    white-space: nowrap;
-    max-width: calc(100vw - 36px);
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+  footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 10px 18px; background: rgba(12,11,9,0.9); backdrop-filter: blur(8px); border-top: 1px solid var(--line); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); display: flex; justify-content: space-between; z-index: 10; }
+
+  .toast { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--line-2); padding: 10px 16px; font-size: 11px; color: var(--text); z-index: 100; opacity: 0; transition: opacity 0.2s; max-width: 90vw; }
   .toast.show { opacity: 1; }
   .toast.err { border-color: var(--danger); color: var(--danger); }
 
-  /* Offline indicator */
-  #offline-badge {
-    display: none;
-    position: fixed;
-    top: calc(8px + var(--safe-top));
-    right: 12px;
-    background: var(--danger);
-    color: #0c0b09;
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    padding: 4px 8px;
-    z-index: 200;
-    border-radius: 2px;
-  }
-  body.offline #offline-badge { display: block; }
-
-  /* Update banner */
-  #update-banner {
-    display: none;
-    background: var(--surface-2);
-    border: 1px solid var(--warn);
-    color: var(--warn);
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    padding: 10px 14px;
-    margin-bottom: 14px;
-    text-align: center;
-    cursor: pointer;
-    animation: fadeIn 0.3s ease;
-  }
-  #update-banner.visible { display: block; }
+  .loader-overlay { position: fixed; inset: 0; background: rgba(12,11,9,0.92); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; z-index: 200; }
+  .loader-overlay.hidden { display: none; }
+  .loader-overlay .title { font-family: var(--serif); font-size: 24px; }
+  .loader-overlay .sub { font-size: 11px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; }
+  .spinner { width: 32px; height: 32px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   @media (max-width: 520px) {
     .brand { font-size: 34px; }
     .statusbar { grid-template-columns: repeat(2, 1fr); }
     .pages-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
     .idle-title { font-size: 26px; }
-    .actions { flex-direction: column; }
-    .actions .btn { width: 100%; justify-content: center; }
   }
 </style>
 </head>
 <body>
-
-<div id="offline-badge">Offline</div>
-
 <div id="app">
-
-  <div id="install-banner">
-    <div class="ib-text">
-      <strong>Install Scanner Agent</strong>
-      Add to your home screen for the best experience
-    </div>
-    <button class="ib-btn" id="btn-install">Install</button>
-    <button class="ib-close" id="btn-install-dismiss" title="Dismiss">✕</button>
-  </div>
-
-  <div id="update-banner" id="update-banner">
-    ↑ New version available — tap to update
-  </div>
 
   <header>
     <div class="brand">Scanner<em>/</em>agent</div>
@@ -646,20 +157,24 @@
   <div class="statusbar">
     <div class="cell"><div class="label">Pages</div><div class="value" id="stat-pages">0</div></div>
     <div class="cell"><div class="label">Status</div><div class="value acc" id="stat-status">IDLE</div></div>
-    <div class="cell"><div class="label">OCR engine</div><div class="value">Claude Vision</div></div>
-    <div class="cell"><div class="label">Output</div><div class="value">Searchable PDF</div></div>
+    <div class="cell"><div class="label">Edge detect</div><div class="value" id="stat-edge">LOADING…</div></div>
+    <div class="cell"><div class="label">Output</div><div class="value">PDF + TXT</div></div>
   </div>
 
-  <!-- IDLE -->
   <section id="sec-idle" class="active">
     <div class="idle-hero">
       <div class="idle-title">Capture, read, <em>archive.</em></div>
-      <div class="idle-sub">Scan documents with your camera. Text is extracted and embedded into a searchable PDF.</div>
+      <div class="idle-sub">Camera → auto-crop → OCR → searchable PDF and text file.</div>
       <button class="btn primary" id="btn-start">◉ Start capture</button>
+      <div class="idle-features">
+        <span>Auto edge detection</span>
+        <span>Perspective correction</span>
+        <span>Claude Vision OCR</span>
+        <span>Searchable PDF + TXT</span>
+      </div>
     </div>
   </section>
 
-  <!-- CAMERA -->
   <section id="sec-camera">
     <div class="section-head">
       <h2>Viewfinder</h2>
@@ -667,10 +182,12 @@
     </div>
     <div class="camera-wrap">
       <video id="video" autoplay playsinline muted></video>
+      <canvas id="edge-canvas"></canvas>
       <div class="camera-overlay-top">
         <span>● REC</span>
         <span id="cam-res">—</span>
       </div>
+      <div class="edge-badge" id="edge-badge">◉ Edge locked</div>
       <div class="viewfinder">
         <div class="corner tl"></div>
         <div class="corner tr"></div>
@@ -685,309 +202,393 @@
       </div>
     </div>
     <div style="margin-top:12px;font-size:10px;color:var(--text-muted);text-align:center;letter-spacing:0.12em;text-transform:uppercase">
-      Align document within brackets · Tap shutter to capture
+      Align document · Green outline = edges locked · Tap shutter
     </div>
   </section>
 
-  <!-- REVIEW -->
   <section id="sec-review">
     <div class="section-head">
       <h2>Review</h2>
       <div class="count" id="rev-count">0 pages</div>
     </div>
+    <div class="filter-bar">
+      <div class="label">Filter</div>
+      <button class="chip active" data-filter="original">Original</button>
+      <button class="chip" data-filter="enhance">Enhance</button>
+      <button class="chip" data-filter="grayscale">Grayscale</button>
+      <button class="chip" data-filter="bw">Black &amp; white</button>
+    </div>
+    <div style="margin-bottom:10px;font-size:10px;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase">Drag pages to reorder · ↻ rotate · × remove</div>
     <div class="pages-grid" id="pages-grid"></div>
     <div class="actions">
       <button class="btn ghost" id="btn-add-more">+ Add more pages</button>
       <button class="btn ghost" id="btn-clear">✕ Clear all</button>
-      <button class="btn primary" id="btn-process">▶ Process & build PDF</button>
+      <button class="btn primary" id="btn-process">▶ Process &amp; extract</button>
     </div>
   </section>
 
-  <!-- PROCESSING -->
   <section id="sec-processing">
     <div class="section-head">
       <h2>Processing</h2>
       <div class="count" id="proc-count">0 / 0</div>
     </div>
     <div class="proc-box">
-      <div style="font-family:var(--serif);font-size:22px;margin-bottom:4px">Extracting text…</div>
-      <div style="color:var(--text-muted);font-size:11px">Sending each page to Claude Vision for OCR, then compiling the searchable PDF.</div>
+      <div style="font-family:var(--serif);font-size:22px;margin-bottom:4px">Understanding documents…</div>
+      <div style="color:var(--text-muted);font-size:11px">Each page is sent to Claude Vision. Text + structure are extracted, then a searchable PDF and text file are built.</div>
       <div class="progress"><div class="bar" id="prog-bar"></div></div>
       <div class="proc-log" id="proc-log"></div>
     </div>
   </section>
 
-  <!-- DONE -->
   <section id="sec-done">
     <div class="done-box">
       <div class="done-mark">✓</div>
       <div class="done-title">Archive ready</div>
-      <div style="color:var(--text-muted);font-size:12px">Your searchable PDF has been compiled.</div>
+      <div style="color:var(--text-muted);font-size:12px">Searchable PDF and text file compiled.</div>
       <div class="done-stats">
         <div class="stat">Pages<b id="done-pages">0</b></div>
         <div class="stat">Words<b id="done-words">0</b></div>
-        <div class="stat">Size<b id="done-size">—</b></div>
+        <div class="stat">Characters<b id="done-chars">0</b></div>
+        <div class="stat">PDF size<b id="done-size">—</b></div>
       </div>
       <div class="actions" style="justify-content:center">
-        <button class="btn primary" id="btn-download">↓ Download PDF</button>
+        <button class="btn primary" id="btn-download-pdf">↓ Download PDF</button>
+        <button class="btn" id="btn-download-txt">↓ Download TXT</button>
+        <button class="btn ghost" id="btn-copy-text">⧉ Copy text</button>
         <button class="btn ghost" id="btn-restart">↻ New scan</button>
       </div>
+      <div class="preview-text" id="preview-text"></div>
     </div>
   </section>
 
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="loader-overlay" id="loader">
+  <div class="spinner"></div>
+  <div class="title">Loading vision engine</div>
+  <div class="sub">OpenCV for edge detection</div>
+</div>
 <footer>
-  <span>SCANNER // v1.0 PWA</span>
+  <span>SCANNER // v0.2</span>
   <span id="footer-status">Ready</span>
 </footer>
 
 <canvas id="canvas" style="display:none"></canvas>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="onOpenCvReady()" onerror="onOpenCvError()"></script>
 <script>
-/* ============================================================
-   SCANNER AGENT — PWA build
-   ============================================================ */
-
-/* ── Service Worker registration ─────────────────────────── */
-let swRegistration = null;
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .then(reg => {
-        swRegistration = reg;
-
-        // Check for updates
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // New version available
-              const banner = document.getElementById('update-banner');
-              banner.classList.add('visible');
-              banner.addEventListener('click', () => {
-                newWorker.postMessage({ type: 'SKIP_WAITING' });
-                window.location.reload();
-              });
-            }
-          });
-        });
-      })
-      .catch(err => console.warn('[SW] Registration failed:', err));
-
-    // Reload when new SW takes control
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) { refreshing = true; window.location.reload(); }
-    });
-  });
-}
-
-/* ── Offline detection ───────────────────────────────────── */
-function updateOnlineStatus() {
-  document.body.classList.toggle('offline', !navigator.onLine);
-  if (!navigator.onLine) toast('You are offline. Camera still works, but OCR requires internet.', true);
-}
-window.addEventListener('online', updateOnlineStatus);
-window.addEventListener('offline', updateOnlineStatus);
-
-/* ── Install prompt (Android "Add to Home Screen") ───────── */
-let deferredInstallPrompt = null;
-const installBanner = document.getElementById('install-banner');
-
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  deferredInstallPrompt = e;
-  // Only show if not already installed
-  if (!window.matchMedia('(display-mode: standalone)').matches) {
-    installBanner.classList.add('visible');
-  }
-});
-
-document.getElementById('btn-install').addEventListener('click', async () => {
-  if (!deferredInstallPrompt) return;
-  deferredInstallPrompt.prompt();
-  const { outcome } = await deferredInstallPrompt.userChoice;
-  deferredInstallPrompt = null;
-  installBanner.classList.remove('visible');
-  if (outcome === 'accepted') toast('App installed! Launch from your home screen.');
-});
-
-document.getElementById('btn-install-dismiss').addEventListener('click', () => {
-  installBanner.classList.remove('visible');
-});
-
-window.addEventListener('appinstalled', () => {
-  installBanner.classList.remove('visible');
-  deferredInstallPrompt = null;
-  toast('Scanner Agent installed ✓');
-});
-
-/* ── Wake Lock (keep screen on while capturing) ──────────── */
-let wakeLock = null;
-async function requestWakeLock() {
-  if ('wakeLock' in navigator) {
-    try {
-      wakeLock = await navigator.wakeLock.request('screen');
-    } catch (e) {
-      console.warn('WakeLock not available:', e);
-    }
-  }
-}
-async function releaseWakeLock() {
-  if (wakeLock) { await wakeLock.release(); wakeLock = null; }
-}
-// Re-acquire on visibility change
-document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState === 'visible' && state.stream) {
-    await requestWakeLock();
-  }
-});
-
-/* ============================================================
-   APP STATE
-   ============================================================ */
-
 const state = {
-  pages: [],        // { id, dataUrl, width, height, text, status }
-  stream: null,
-  pdfBlob: null,
-  pdfStats: null,
+  pages: [], stream: null, pdfBlob: null, txtBlob: null, allText: '',
+  pdfStats: null, currentFilter: 'original', edgeQuad: null, edgeLoopId: null, cvReady: false,
 };
-
 const $ = id => document.getElementById(id);
-const sections = ['idle', 'camera', 'review', 'processing', 'done'];
+const sections = ['idle','camera','review','processing','done'];
 
 function showSection(name) {
-  sections.forEach(s => $('sec-' + s).classList.toggle('active', s === name));
-  const statusMap = {
-    idle: 'IDLE', camera: 'CAPTURE', review: 'REVIEW',
-    processing: 'PROCESSING', done: 'COMPLETE'
-  };
-  $('stat-status').textContent = statusMap[name] || '—';
-  $('footer-status').textContent = statusMap[name] || '—';
+  sections.forEach(s => $('sec-'+s).classList.toggle('active', s===name));
+  const m = { idle:'IDLE', camera:'CAPTURE', review:'REVIEW', processing:'PROCESSING', done:'COMPLETE' };
+  $('stat-status').textContent = m[name] || '—';
+  $('footer-status').textContent = m[name] || '—';
 }
-
 function toast(msg, isErr) {
-  const t = $('toast');
-  t.textContent = msg;
-  t.classList.toggle('err', !!isErr);
-  t.classList.add('show');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.classList.remove('show'), 2800);
+  const t = $('toast'); t.textContent = msg;
+  t.classList.toggle('err', !!isErr); t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600);
 }
-
 function updateClock() {
-  const d = new Date();
-  const pad = n => String(n).padStart(2, '0');
+  const d = new Date(); const pad = n => String(n).padStart(2,'0');
   $('clock').textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 setInterval(updateClock, 1000); updateClock();
 
 function updatePageCount() {
-  $('stat-pages').textContent = String(state.pages.length).padStart(2, '0');
+  $('stat-pages').textContent = String(state.pages.length).padStart(2,'0');
   $('cam-count').textContent = `${String(state.pages.length).padStart(2,'0')} pages captured`;
   $('rev-count').textContent = `${state.pages.length} page${state.pages.length===1?'':'s'}`;
 }
 
-/* ── Camera ──────────────────────────────────────────────── */
+/* opencv */
+function onOpenCvReady() {
+  if (window.cv && cv.getBuildInformation) {
+    state.cvReady = true; $('stat-edge').textContent = 'READY'; $('loader').classList.add('hidden');
+  } else if (window.cv) {
+    cv.onRuntimeInitialized = () => {
+      state.cvReady = true; $('stat-edge').textContent = 'READY'; $('loader').classList.add('hidden');
+    };
+  }
+}
+function onOpenCvError() {
+  $('stat-edge').textContent = 'OFFLINE'; $('loader').classList.add('hidden');
+  toast('Edge detection offline — capture still works', true);
+}
+setTimeout(() => $('loader').classList.add('hidden'), 15000);
 
+/* camera */
 async function startCamera() {
   try {
-    await requestWakeLock();
     state.stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: 'environment' },
-        width: { ideal: 1920 },
-        height: { ideal: 1440 },
-      },
-      audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1440 } }, audio: false,
     });
     const video = $('video');
-    video.srcObject = state.stream;
-    await video.play();
-    const track = state.stream.getVideoTracks()[0];
-    const s = track.getSettings();
-    $('cam-res').textContent = `${s.width || '—'} × ${s.height || '—'}`;
+    video.srcObject = state.stream; await video.play();
+    const s = state.stream.getVideoTracks()[0].getSettings();
+    $('cam-res').textContent = `${s.width||'—'} × ${s.height||'—'}`;
     showSection('camera');
+    const ec = $('edge-canvas');
+    const sync = () => { ec.width = video.videoWidth; ec.height = video.videoHeight; };
+    if (video.videoWidth) sync(); else video.addEventListener('loadedmetadata', sync, { once:true });
+    if (state.cvReady) startEdgeLoop();
   } catch (err) {
-    console.error(err);
-    releaseWakeLock();
-    if (err.name === 'NotAllowedError') {
-      toast('Camera permission denied. Please allow camera access in Settings.', true);
-    } else {
-      toast('Camera unavailable: ' + err.message, true);
-    }
+    console.error(err); toast('Camera unavailable: ' + err.message, true);
+    showSection(state.pages.length ? 'review' : 'idle');
   }
 }
-
 function stopCamera() {
-  if (state.stream) {
-    state.stream.getTracks().forEach(t => t.stop());
-    state.stream = null;
-  }
-  releaseWakeLock();
+  if (state.edgeLoopId) { cancelAnimationFrame(state.edgeLoopId); state.edgeLoopId = null; }
+  const ec = $('edge-canvas'); ec.getContext('2d').clearRect(0,0,ec.width,ec.height);
+  if (state.stream) { state.stream.getTracks().forEach(t => t.stop()); state.stream = null; }
 }
 
+/* live edge detection */
+function startEdgeLoop() {
+  const video = $('video'); const ec = $('edge-canvas'); const ctx = ec.getContext('2d');
+  const work = document.createElement('canvas'); const workCtx = work.getContext('2d');
+  let lastRun = 0;
+  const loop = (ts) => {
+    state.edgeLoopId = requestAnimationFrame(loop);
+    if (!video.videoWidth) return;
+    if (ts - lastRun < 180) return;
+    lastRun = ts;
+    const scale = 480 / video.videoWidth;
+    work.width = Math.round(video.videoWidth * scale);
+    work.height = Math.round(video.videoHeight * scale);
+    workCtx.drawImage(video, 0, 0, work.width, work.height);
+    try {
+      const quad = detectQuad(work);
+      ctx.clearRect(0,0,ec.width,ec.height);
+      if (quad) {
+        const pts = quad.map(p => [p[0]/scale, p[1]/scale]);
+        drawQuad(ctx, pts, '#d4ff3a');
+        state.edgeQuad = pts;
+        $('edge-badge').classList.remove('off'); $('edge-badge').textContent = '◉ Edges locked';
+      } else {
+        state.edgeQuad = null;
+        $('edge-badge').classList.add('off'); $('edge-badge').textContent = '○ Searching…';
+      }
+    } catch (e) {}
+  };
+  state.edgeLoopId = requestAnimationFrame(loop);
+}
+function drawQuad(ctx, pts, color) {
+  ctx.save();
+  ctx.strokeStyle = color; ctx.lineWidth = 4; ctx.shadowColor = color; ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath(); ctx.stroke();
+  ctx.fillStyle = color; ctx.shadowBlur = 4;
+  pts.forEach(p => { ctx.beginPath(); ctx.arc(p[0], p[1], 6, 0, Math.PI*2); ctx.fill(); });
+  ctx.restore();
+}
+function detectQuad(srcCanvas) {
+  if (!state.cvReady) return null;
+  const src = cv.imread(srcCanvas); const gray = new cv.Mat(); const blur = new cv.Mat();
+  const edges = new cv.Mat(); const contours = new cv.MatVector(); const hierarchy = new cv.Mat();
+  let best = null;
+  try {
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+    cv.GaussianBlur(gray, blur, new cv.Size(5,5), 0);
+    cv.Canny(blur, edges, 60, 180);
+    const kernel = cv.Mat.ones(3,3,cv.CV_8U); cv.dilate(edges, edges, kernel); kernel.delete();
+    cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    const area = src.cols * src.rows; let bestArea = 0;
+    for (let i = 0; i < contours.size(); i++) {
+      const c = contours.get(i); const a = cv.contourArea(c);
+      if (a < area * 0.15) { c.delete(); continue; }
+      const peri = cv.arcLength(c, true); const approx = new cv.Mat();
+      cv.approxPolyDP(c, approx, 0.02*peri, true);
+      if (approx.rows === 4 && a > bestArea) {
+        bestArea = a;
+        const pts = [];
+        for (let j = 0; j < 4; j++) pts.push([approx.data32S[j*2], approx.data32S[j*2+1]]);
+        best = sortQuad(pts);
+      }
+      approx.delete(); c.delete();
+    }
+  } finally {
+    src.delete(); gray.delete(); blur.delete(); edges.delete(); contours.delete(); hierarchy.delete();
+  }
+  return best;
+}
+function sortQuad(pts) {
+  const sum = pts.map(p => p[0]+p[1]); const diff = pts.map(p => p[0]-p[1]);
+  return [
+    pts[sum.indexOf(Math.min(...sum))],
+    pts[diff.indexOf(Math.max(...diff))],
+    pts[sum.indexOf(Math.max(...sum))],
+    pts[diff.indexOf(Math.min(...diff))],
+  ];
+}
+
+/* perspective warp */
+function warpQuadFromCanvas(srcCanvas, quad) {
+  if (!state.cvReady || !quad) return null;
+  const src = cv.imread(srcCanvas); const dst = new cv.Mat();
+  try {
+    const [tl, tr, br, bl] = quad;
+    const W = Math.max(Math.hypot(br[0]-bl[0], br[1]-bl[1]), Math.hypot(tr[0]-tl[0], tr[1]-tl[1]));
+    const H = Math.max(Math.hypot(tr[0]-br[0], tr[1]-br[1]), Math.hypot(tl[0]-bl[0], tl[1]-bl[1]));
+    const srcTri = cv.matFromArray(4,1,cv.CV_32FC2,[tl[0],tl[1], tr[0],tr[1], br[0],br[1], bl[0],bl[1]]);
+    const dstTri = cv.matFromArray(4,1,cv.CV_32FC2,[0,0, W,0, W,H, 0,H]);
+    const M = cv.getPerspectiveTransform(srcTri, dstTri);
+    cv.warpPerspective(src, dst, M, new cv.Size(W,H), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+    const out = document.createElement('canvas');
+    out.width = Math.round(W); out.height = Math.round(H);
+    cv.imshow(out, dst);
+    srcTri.delete(); dstTri.delete(); M.delete();
+    return out;
+  } finally { src.delete(); dst.delete(); }
+}
+
+/* capture */
 function capture() {
   const video = $('video');
   if (!video.videoWidth) { toast('Camera not ready', true); return; }
   const c = $('canvas');
-  c.width = video.videoWidth;
-  c.height = video.videoHeight;
-  const ctx = c.getContext('2d');
-  ctx.drawImage(video, 0, 0);
-  const dataUrl = c.toDataURL('image/jpeg', 0.88);
+  c.width = video.videoWidth; c.height = video.videoHeight;
+  c.getContext('2d').drawImage(video, 0, 0);
+  let finalCanvas = c; let corrected = false;
+  if (state.edgeQuad && state.cvReady) {
+    try {
+      const warped = warpQuadFromCanvas(c, state.edgeQuad);
+      if (warped) { finalCanvas = warped; corrected = true; }
+    } catch (e) { console.error(e); }
+  }
+  const dataUrl = finalCanvas.toDataURL('image/jpeg', 0.9);
   state.pages.push({
-    id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-    dataUrl,
-    width: c.width,
-    height: c.height,
-    text: '',
-    status: 'pending',
+    id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+    originalDataUrl: dataUrl, dataUrl,
+    width: finalCanvas.width, height: finalCanvas.height,
+    rotation: 0, filter: 'original',
+    text: '', structured: null, status: 'pending', corrected,
   });
   updatePageCount();
-  // Flash feedback
-  const v = $('video').parentElement;
   const flash = document.createElement('div');
   flash.style.cssText = 'position:absolute;inset:0;background:#fff;opacity:0.6;pointer-events:none;z-index:50;transition:opacity 0.25s';
-  v.appendChild(flash);
-  // Haptic feedback on Android
-  if (navigator.vibrate) navigator.vibrate(50);
+  video.parentElement.appendChild(flash);
   requestAnimationFrame(() => { flash.style.opacity = '0'; });
   setTimeout(() => flash.remove(), 260);
-  toast(`Captured page ${state.pages.length}`);
+  toast(`Captured page ${state.pages.length}${corrected?' (auto-cropped)':''}`);
 }
 
-/* ── Review ──────────────────────────────────────────────── */
+/* filters + rotation */
+function applyFilter(dataUrl, filter, rotation) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const rot = ((rotation % 360) + 360) % 360;
+      const swap = rot === 90 || rot === 270;
+      const c = document.createElement('canvas');
+      c.width = swap ? img.height : img.width;
+      c.height = swap ? img.width : img.height;
+      const ctx = c.getContext('2d');
+      ctx.save();
+      ctx.translate(c.width/2, c.height/2);
+      ctx.rotate(rot * Math.PI/180);
+      ctx.drawImage(img, -img.width/2, -img.height/2);
+      ctx.restore();
+      if (filter !== 'original') {
+        const imgData = ctx.getImageData(0, 0, c.width, c.height);
+        const d = imgData.data;
+        if (filter === 'grayscale') {
+          for (let i = 0; i < d.length; i += 4) {
+            const g = d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+            d[i]=d[i+1]=d[i+2]=g;
+          }
+        } else if (filter === 'enhance') {
+          for (let i = 0; i < d.length; i += 4) {
+            for (let k = 0; k < 3; k++) {
+              let v = (d[i+k] - 128) * 1.35 + 132;
+              d[i+k] = Math.max(0, Math.min(255, v));
+            }
+          }
+        } else if (filter === 'bw') {
+          let sum = 0, n = 0;
+          for (let i = 0; i < d.length; i += 4) { sum += d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114; n++; }
+          const th = (sum/n) * 0.92;
+          for (let i = 0; i < d.length; i += 4) {
+            const g = d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+            const v = g < th ? 0 : 255;
+            d[i]=d[i+1]=d[i+2]=v;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+      }
+      resolve({ dataUrl: c.toDataURL('image/jpeg', 0.9), width: c.width, height: c.height });
+    };
+    img.src = dataUrl;
+  });
+}
+async function rerenderPage(p) {
+  const out = await applyFilter(p.originalDataUrl, p.filter, p.rotation);
+  p.dataUrl = out.dataUrl; p.width = out.width; p.height = out.height;
+}
+async function applyFilterToAll(filter) {
+  state.currentFilter = filter;
+  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.filter===filter));
+  for (const p of state.pages) { p.filter = filter; await rerenderPage(p); }
+  renderPages();
+}
 
+/* review + drag-to-reorder */
 function renderPages() {
-  const grid = $('pages-grid');
-  grid.innerHTML = '';
+  const grid = $('pages-grid'); grid.innerHTML = '';
   state.pages.forEach((p, i) => {
     const card = document.createElement('div');
-    card.className = 'page-card';
+    card.className = 'page-card'; card.draggable = true; card.dataset.id = p.id;
     card.innerHTML = `
       <img src="${p.dataUrl}" alt="page ${i+1}" />
       <div class="pagenum">${String(i+1).padStart(4,'0')}</div>
-      <button class="remove" data-id="${p.id}" title="Remove">×</button>
-    `;
+      <div class="page-tools">
+        <button class="rotate" title="Rotate 90°">↻</button>
+        <button class="remove" title="Remove">×</button>
+      </div>`;
     card.querySelector('.remove').addEventListener('click', (e) => {
       e.stopPropagation();
       state.pages = state.pages.filter(x => x.id !== p.id);
+      renderPages(); updatePageCount();
+    });
+    card.querySelector('.rotate').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      p.rotation = (p.rotation + 90) % 360;
+      await rerenderPage(p); renderPages();
+    });
+    card.addEventListener('dragstart', (e) => {
+      card.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', p.id);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+    card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('drag-over'); });
+    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+    card.addEventListener('drop', (e) => {
+      e.preventDefault(); card.classList.remove('drag-over');
+      const fromId = e.dataTransfer.getData('text/plain');
+      if (!fromId || fromId === p.id) return;
+      const fromIdx = state.pages.findIndex(x => x.id === fromId);
+      const toIdx = state.pages.findIndex(x => x.id === p.id);
+      if (fromIdx < 0 || toIdx < 0) return;
+      const [moved] = state.pages.splice(fromIdx, 1);
+      state.pages.splice(toIdx, 0, moved);
       renderPages();
-      updatePageCount();
     });
     grid.appendChild(card);
   });
 }
 
-/* ── OCR via Claude Vision ───────────────────────────────── */
-
+/* OCR via Claude Vision */
 async function ocrPage(page) {
-  if (!navigator.onLine) throw new Error('No internet connection. Please go online to use OCR.');
   const base64 = page.dataUrl.split(',')[1];
   const body = {
     model: "claude-sonnet-4-20250514",
@@ -996,7 +597,24 @@ async function ocrPage(page) {
       role: "user",
       content: [
         { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
-        { type: "text", text: "Extract ALL text from this document image. Preserve the original reading order, paragraph breaks, headings, and list structure. Return ONLY the extracted text, with no commentary, no markdown code fences, no introductions. If the image has no readable text, return exactly: [NO TEXT DETECTED]" }
+        { type: "text", text:
+`You are a document-understanding OCR engine. Analyze this document image and extract its contents.
+
+Respond with ONLY a JSON object (no markdown fences, no preamble). Schema:
+{
+  "doc_type": "letter|invoice|receipt|form|article|notes|table|other",
+  "language": "ISO 639-1 code",
+  "title": "short title if present, else null",
+  "blocks": [
+    { "type": "heading|paragraph|list_item|table_row|signature|footer|header", "text": "..." }
+  ],
+  "plain_text": "full reading-order text of the document with natural line breaks"
+}
+
+Rules:
+- Preserve original reading order and line breaks in plain_text.
+- Keep every word; do not summarize or paraphrase.
+- If unreadable, return blocks: [] and plain_text: "[NO TEXT DETECTED]".` }
       ]
     }]
   };
@@ -1007,171 +625,160 @@ async function ocrPage(page) {
   });
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
-    throw new Error(`API ${res.status}: ${errText.slice(0, 120)}`);
+    throw new Error(`API ${res.status}: ${errText.slice(0,160)}`);
   }
   const data = await res.json();
-  const text = (data.content || [])
-    .filter(x => x.type === 'text')
-    .map(x => x.text)
-    .join('\n')
-    .trim();
-  return text || '[NO TEXT DETECTED]';
+  const raw = (data.content||[]).filter(x => x.type==='text').map(x => x.text).join('\n').trim();
+  try {
+    const cleaned = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```$/,'').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    return { doc_type:'other', language:'und', title:null, blocks:[], plain_text: raw || '[NO TEXT DETECTED]' };
+  }
 }
 
-/* ── Log ─────────────────────────────────────────────────── */
-
-function log(msg, kind = '') {
+/* log */
+function log(msg, kind='') {
   const el = $('proc-log');
   const line = document.createElement('div');
-  line.className = 'line' + (kind ? ' ' + kind : '');
-  const t = new Date().toTimeString().slice(0, 8);
+  line.className = 'line' + (kind?' '+kind:'');
+  const t = new Date().toTimeString().slice(0,8);
   line.innerHTML = `<span class="t">${t}</span>${msg}`;
-  el.appendChild(line);
-  el.scrollTop = el.scrollHeight;
+  el.appendChild(line); el.scrollTop = el.scrollHeight;
 }
 
-/* ── PDF build ───────────────────────────────────────────── */
-
-function buildPdf() {
+/* build PDF + TXT */
+function buildOutputs() {
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+  const doc = new jsPDF({ orientation:'portrait', unit:'pt', format:'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
+  let totalWords = 0, totalChars = 0, combined = '';
 
-  let totalWords = 0;
   state.pages.forEach((p, i) => {
     if (i > 0) doc.addPage();
     const ratio = p.width / p.height;
-    const pageRatio = pageW / pageH;
+    const pr = pageW / pageH;
     let drawW, drawH, offX, offY;
-    if (ratio > pageRatio) {
-      drawW = pageW; drawH = pageW / ratio;
-      offX = 0; offY = (pageH - drawH) / 2;
-    } else {
-      drawH = pageH; drawW = pageH * ratio;
-      offX = (pageW - drawW) / 2; offY = 0;
-    }
+    if (ratio > pr) { drawW = pageW; drawH = pageW/ratio; offX = 0; offY = (pageH-drawH)/2; }
+    else { drawH = pageH; drawW = pageH*ratio; offX = (pageW-drawW)/2; offY = 0; }
     doc.addImage(p.dataUrl, 'JPEG', offX, offY, drawW, drawH, undefined, 'FAST');
-    if (p.text && p.text !== '[NO TEXT DETECTED]') {
-      totalWords += p.text.split(/\s+/).filter(Boolean).length;
+
+    const pageText = (p.structured && p.structured.plain_text) || p.text || '';
+    if (pageText && pageText !== '[NO TEXT DETECTED]') {
+      totalWords += pageText.split(/\s+/).filter(Boolean).length;
+      totalChars += pageText.length;
       doc.setFontSize(8);
-      const lines = doc.splitTextToSize(p.text, pageW - 40);
-      try {
-        doc.text(lines, 20, 24, { renderingMode: 'invisible' });
-      } catch (e) {
-        doc.text(lines, 20, 24);
-      }
+      const lines = doc.splitTextToSize(pageText, pageW - 40);
+      try { doc.text(lines, 20, 24, { renderingMode:'invisible' }); }
+      catch (e) { doc.text(lines, 20, 24); }
     }
+    const header = `━━━ PAGE ${i+1}${p.structured&&p.structured.title?' · '+p.structured.title:''}${p.structured&&p.structured.doc_type?' · ['+p.structured.doc_type+']':''} ━━━`;
+    combined += (i?'\n\n':'') + header + '\n\n' + (pageText || '[NO TEXT DETECTED]');
   });
 
-  const blob = doc.output('blob');
-  state.pdfBlob = blob;
+  state.pdfBlob = doc.output('blob');
+  state.txtBlob = new Blob([combined], { type:'text/plain;charset=utf-8' });
+  state.allText = combined;
   state.pdfStats = {
-    pages: state.pages.length,
-    words: totalWords,
-    size: (blob.size / 1024).toFixed(0) + ' KB',
+    pages: state.pages.length, words: totalWords, chars: totalChars,
+    size: (state.pdfBlob.size/1024).toFixed(0) + ' KB',
   };
-  return blob;
 }
 
-/* ── Processing pipeline ─────────────────────────────────── */
-
+/* pipeline */
 async function process() {
   if (!state.pages.length) { toast('No pages to process', true); return; }
   showSection('processing');
-  $('proc-log').innerHTML = '';
-  $('prog-bar').style.width = '0%';
+  $('proc-log').innerHTML = ''; $('prog-bar').style.width = '0%';
   $('proc-count').textContent = `0 / ${state.pages.length}`;
-  log(`Starting OCR pipeline · ${state.pages.length} page(s)`);
+  log(`Starting OCR · ${state.pages.length} page(s)`);
 
   let done = 0;
-  let failed = 0;
   for (const page of state.pages) {
     page.status = 'running';
-    log(`Page ${done + 1} → sending to Claude Vision…`);
+    log(`Page ${done+1} → Claude Vision…`);
     try {
-      const text = await ocrPage(page);
-      page.text = text;
+      const structured = await ocrPage(page);
+      page.structured = structured;
+      page.text = structured.plain_text || '';
       page.status = 'done';
-      const wc = text.split(/\s+/).filter(Boolean).length;
-      log(`Page ${done + 1} ✓ extracted ${wc} words`, 'ok');
+      const wc = (page.text||'').split(/\s+/).filter(Boolean).length;
+      log(`Page ${done+1} ✓ ${structured.doc_type||'doc'} · ${wc} words · ${structured.language||'und'}`, 'ok');
     } catch (err) {
-      console.error(err);
-      page.text = '';
-      page.status = 'error';
-      failed++;
-      log(`Page ${done + 1} ✗ ${err.message}`, 'err');
+      console.error(err); page.text = ''; page.status = 'error';
+      log(`Page ${done+1} ✗ ${err.message}`, 'err');
     }
     done++;
     $('proc-count').textContent = `${done} / ${state.pages.length}`;
-    $('prog-bar').style.width = ((done / state.pages.length) * 100) + '%';
+    $('prog-bar').style.width = ((done/state.pages.length)*100) + '%';
   }
 
-  log(`OCR complete. Building PDF…`);
+  log('Building searchable PDF + text file…');
   try {
-    buildPdf();
-    log(`PDF ready · ${state.pdfStats.pages} page(s) · ${state.pdfStats.words} words · ${state.pdfStats.size}`, 'ok');
+    buildOutputs();
+    log(`✓ PDF ${state.pdfStats.size} · TXT ${(state.txtBlob.size/1024).toFixed(1)} KB · ${state.pdfStats.words} words`, 'ok');
     $('done-pages').textContent = state.pdfStats.pages;
     $('done-words').textContent = state.pdfStats.words;
+    $('done-chars').textContent = state.pdfStats.chars;
     $('done-size').textContent = state.pdfStats.size;
-    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    setTimeout(() => showSection('done'), 600);
+    const preview = $('preview-text'); preview.innerHTML = '';
+    state.pages.forEach((p, i) => {
+      const hdr = document.createElement('div');
+      hdr.className = 'pagebreak';
+      hdr.textContent = `◆ PAGE ${i+1}${p.structured&&p.structured.title?' · '+p.structured.title:''}${p.structured&&p.structured.doc_type?' · ['+p.structured.doc_type+']':''}`;
+      preview.appendChild(hdr);
+      const body = document.createElement('div');
+      const t = (p.structured&&p.structured.plain_text) || p.text || '[NO TEXT DETECTED]';
+      body.textContent = t.length > 1200 ? t.slice(0,1200) + '…' : t;
+      preview.appendChild(body);
+    });
+    setTimeout(() => showSection('done'), 500);
   } catch (err) {
-    log('PDF build failed: ' + err.message, 'err');
-    toast('PDF build failed', true);
+    log('Build failed: ' + err.message, 'err'); toast('Build failed', true);
   }
 }
 
-/* ── Download ────────────────────────────────────────────── */
-
-function downloadPdf() {
-  if (!state.pdfBlob) return;
-  const url = URL.createObjectURL(state.pdfBlob);
-  const a = document.createElement('a');
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-  a.href = url;
-  a.download = `scan_${stamp}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+/* downloads */
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+function stamp() { return new Date().toISOString().slice(0,19).replace(/[:T]/g,'-'); }
 
-/* ── Wiring ──────────────────────────────────────────────── */
-
+/* wiring */
 $('btn-start').addEventListener('click', startCamera);
 $('btn-shutter').addEventListener('click', capture);
 $('btn-cancel').addEventListener('click', () => {
   stopCamera();
-  showSection(state.pages.length ? 'review' : 'idle');
-  if (state.pages.length) renderPages();
+  if (state.pages.length) { renderPages(); showSection('review'); } else showSection('idle');
 });
 $('btn-done').addEventListener('click', () => {
   if (!state.pages.length) { toast('Capture at least one page', true); return; }
-  stopCamera();
-  renderPages();
-  showSection('review');
+  stopCamera(); renderPages(); showSection('review');
 });
 $('btn-add-more').addEventListener('click', startCamera);
 $('btn-clear').addEventListener('click', () => {
   if (confirm('Remove all captured pages?')) {
-    state.pages = [];
-    renderPages();
-    updatePageCount();
-    showSection('idle');
+    state.pages = []; renderPages(); updatePageCount(); showSection('idle');
   }
 });
 $('btn-process').addEventListener('click', process);
-$('btn-download').addEventListener('click', downloadPdf);
-$('btn-restart').addEventListener('click', () => {
-  state.pages = [];
-  state.pdfBlob = null;
-  updatePageCount();
-  showSection('idle');
+$('btn-download-pdf').addEventListener('click', () => { if (state.pdfBlob) downloadBlob(state.pdfBlob, `scan_${stamp()}.pdf`); });
+$('btn-download-txt').addEventListener('click', () => { if (state.txtBlob) downloadBlob(state.txtBlob, `scan_${stamp()}.txt`); });
+$('btn-copy-text').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(state.allText||''); toast('Text copied'); }
+  catch (e) { toast('Copy failed', true); }
 });
+$('btn-restart').addEventListener('click', () => {
+  state.pages = []; state.pdfBlob = null; state.txtBlob = null; state.allText = '';
+  updatePageCount(); showSection('idle');
+});
+document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => applyFilterToAll(c.dataset.filter)));
 
 updatePageCount();
-updateOnlineStatus();
 </script>
 </body>
 </html>

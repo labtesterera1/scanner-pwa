@@ -193,13 +193,16 @@
   <section id="sec-idle" class="active">
     <div class="idle-hero">
       <div class="idle-title">Capture, read, <em>archive.</em></div>
-      <div class="idle-sub">Camera → auto-crop → OCR → searchable PDF and text file.</div>
-      <button class="btn primary" id="btn-start">◉ Start capture</button>
+      <div class="idle-sub">Camera or upload → auto-crop → AI text extraction → searchable PDF + TXT</div>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <button class="btn primary" id="btn-start">◉ Start capture</button>
+        <button class="btn" id="btn-upload">⬆ Add capture</button>
+      </div>
       <div class="idle-features">
-        <span>Auto edge detection</span>
-        <span>Perspective correction</span>
-        <span>Claude Vision OCR</span>
-        <span>Searchable PDF + TXT</span>
+        <span>Camera + uploads</span>
+        <span>PDF import</span>
+        <span>AI text extraction</span>
+        <span>Unlimited pages</span>
       </div>
     </div>
   </section>
@@ -250,7 +253,8 @@
     <div style="margin-bottom:10px;font-size:10px;color:var(--text-dim);letter-spacing:0.12em;text-transform:uppercase">Filters affect PDF only · OCR always sees the original · Drag to reorder · ↻ rotate · × remove</div>
     <div class="pages-grid" id="pages-grid"></div>
     <div class="actions">
-      <button class="btn ghost" id="btn-add-more">+ Add more pages</button>
+      <button class="btn ghost" id="btn-add-more">+ Add camera page</button>
+      <button class="btn ghost" id="btn-upload-more">⬆ Add capture (images/PDF)</button>
       <button class="btn ghost" id="btn-clear">✕ Clear all</button>
       <button class="btn primary" id="btn-process">▶ Process &amp; extract</button>
     </div>
@@ -327,17 +331,19 @@
 </div>
 <div class="loader-overlay" id="loader">
   <div class="spinner"></div>
-  <div class="title">Loading vision engine</div>
-  <div class="sub">OpenCV for edge detection</div>
+  <div class="title">Loading engines</div>
+  <div class="sub">OpenCV + PDF.js</div>
 </div>
 <footer>
-  <span>SCANNER // v0.5</span>
+  <span>SCANNER // v0.6</span>
   <span id="footer-status">Ready</span>
 </footer>
 
 <canvas id="canvas" style="display:none"></canvas>
+<input type="file" id="file-input" accept="image/*,application/pdf" multiple style="display:none" />
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="onOpenCvReady()" onerror="onOpenCvError()"></script>
 <script>
 const state = {
@@ -445,7 +451,125 @@ function onOpenCvError() {
 }
 setTimeout(() => $('loader').classList.add('hidden'), 15000);
 
-/* camera */
+/* PDF.js worker */
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+/* ---------- FILE UPLOAD (images + PDFs) ---------- */
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error('Read failed'));
+    r.readAsDataURL(file);
+  });
+}
+
+function imageDataUrlDimensions(dataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.width, height: img.height });
+    img.onerror = () => resolve({ width: 0, height: 0 });
+    img.src = dataUrl;
+  });
+}
+
+async function addImageFile(file) {
+  const dataUrl = await fileToDataUrl(file);
+  const { width, height } = await imageDataUrlDimensions(dataUrl);
+  if (!width) return false;
+  state.pages.push({
+    id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+    originalDataUrl: dataUrl, dataUrl,
+    width, height,
+    rotation: 0, filter: 'original',
+    text: '', structured: null, status: 'pending', corrected: false,
+    source: 'upload',
+  });
+  return true;
+}
+
+async function addPdfFile(file) {
+  if (!window.pdfjsLib) throw new Error('PDF.js not loaded');
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let added = 0;
+  for (let i = 1; i <= pdf.numPages; i++) {
+    showLoaderText(`Rendering PDF page ${i} / ${pdf.numPages}…`);
+    const page = await pdf.getPage(i);
+    // render at 2x for good OCR quality; cap long edge at 2400
+    let scale = 2;
+    const baseView = page.getViewport({ scale: 1 });
+    const longEdge = Math.max(baseView.width, baseView.height);
+    if (longEdge * scale > 2400) scale = 2400 / longEdge;
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    state.pages.push({
+      id: 'p_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2,6),
+      originalDataUrl: dataUrl, dataUrl,
+      width: canvas.width, height: canvas.height,
+      rotation: 0, filter: 'original',
+      text: '', structured: null, status: 'pending', corrected: false,
+      source: 'pdf',
+    });
+    added++;
+  }
+  return added;
+}
+
+function showLoader(title, sub) {
+  const l = $('loader');
+  l.querySelector('.title').textContent = title || 'Working…';
+  l.querySelector('.sub').textContent = sub || '';
+  l.classList.remove('hidden');
+}
+function showLoaderText(sub) { $('loader').querySelector('.sub').textContent = sub; }
+function hideLoader() { $('loader').classList.add('hidden'); }
+
+async function handleUploadedFiles(files) {
+  if (!files || !files.length) return;
+  showLoader('Importing files', 'Reading…');
+  let imgCount = 0, pdfPages = 0, errors = 0;
+  for (const file of files) {
+    try {
+      if (file.type.startsWith('image/')) {
+        const ok = await addImageFile(file);
+        if (ok) imgCount++;
+      } else if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+        const n = await addPdfFile(file);
+        pdfPages += n;
+      } else {
+        errors++;
+      }
+    } catch (err) {
+      console.error(err);
+      errors++;
+    }
+  }
+  hideLoader();
+  updatePageCount();
+  renderPages();
+  if (state.pages.length) showSection('review');
+  const parts = [];
+  if (imgCount) parts.push(`${imgCount} image${imgCount>1?'s':''}`);
+  if (pdfPages) parts.push(`${pdfPages} PDF page${pdfPages>1?'s':''}`);
+  toast(parts.length ? `Added ${parts.join(' + ')}` : (errors ? 'No supported files found' : 'Nothing added'), !parts.length);
+}
+
+function openFilePicker() {
+  const input = $('file-input');
+  input.value = '';
+  input.click();
+}
 async function startCamera() {
   try {
     state.stream = await navigator.mediaDevices.getUserMedia({
@@ -730,73 +854,76 @@ function resizeDataUrl(dataUrl, targetLong = 1600) {
    (NEVER send the user's stylistic filter — that can destroy text) */
 async function prepareOcrImage(page) {
   const rotated = await applyFilter(page.originalDataUrl, 'original', page.rotation);
-  return resizeDataUrl(rotated.dataUrl, 1600);
+  // Send higher resolution (2000px) — better accuracy on dense text
+  return resizeDataUrl(rotated.dataUrl, 2000);
 }
 
-/* OCR via Claude Vision — universal content extractor */
-async function ocrPage(page) {
-  const ocrDataUrl = await prepareOcrImage(page);
-  const base64 = ocrDataUrl.split(',')[1];
+/* STAGE 1: Transcribe ALL text. Pure text output, no JSON, high token budget.
+   This is the primary content — it can never be lost to JSON truncation. */
+async function transcribeText(base64) {
   const body = {
     model: "claude-sonnet-4-20250514",
-    max_tokens: 4096,
+    max_tokens: 8192,
     messages: [{
       role: "user",
       content: [
         { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
         { type: "text", text:
-`You are a universal visual content extraction engine. Extract EVERY piece of useful information from this image.
+`Your ONLY job: transcribe EVERY piece of visible text from this image, exactly as it appears.
 
-The image may be any of: a printed document, receipt, invoice, form, handwritten note, whiteboard, screenshot, book page, business card, ID card, sign, poster, diagram, chart, or a scene/photo that contains text. Do NOT assume — look carefully at whatever is actually there.
+HARD RULES:
+- Transcribe every word, number, symbol, URL, email, phone number, date, code, label, caption, watermark, stamp, signature block, table cell, footer, header, list bullet — everything.
+- Preserve original reading order (top-to-bottom, left-to-right for columns).
+- Preserve line breaks, paragraph breaks, indentation, and list structure.
+- For tables, align columns with spaces or tabs so the structure survives.
+- For handwriting, transcribe your best reading; mark unclear words with (?) only when truly unreadable.
+- Do NOT summarize. Do NOT paraphrase. Do NOT omit repeated content. Do NOT add commentary, preamble, markdown code fences, quotes, or headers like "Transcription:".
+- If the image is a multi-column layout (e.g., newspaper, invoice), transcribe column by column in reading order.
+- If the image is code/source code, preserve indentation and special characters exactly.
 
-Respond with ONLY a JSON object (no markdown fences, no preamble, no code blocks). Schema:
-{
-  "content_type": "document|receipt|invoice|form|handwritten|whiteboard|screenshot|book|card|sign|diagram|chart|photo_with_text|scene|other",
-  "language": "ISO 639-1 code, 'mixed', or 'und'",
-  "title": "short descriptive title — always provide one, even for photos",
-  "has_text": true or false,
-  "blocks": [
-    { "type": "heading|paragraph|list_item|table_row|signature|caption|label|address|amount|date", "text": "..." }
-  ],
-  "plain_text": "ALL text visible in the image, in natural reading order, with line breaks preserved exactly",
-  "description": "what the image shows — always provide this, even when text is present",
-  "key_fields": { "sender": "...", "date": "...", "total": "...", "...": "..." }
-}
-
-STRICT rules:
-- Extract EVERY visible word, number, symbol, stamp, signature, logo text — even faint, angled, partial, handwritten, or stylized text.
-- If handwritten, transcribe it to your best ability — never skip it.
-- Preserve reading order and original line breaks in plain_text.
-- If the image contains truly no text (pure photo/scene), set has_text=false and plain_text="" — but ALWAYS fill description with rich detail.
-- key_fields is optional — use it when the image is a receipt/invoice/form/card to surface structured data.
-- NEVER output the phrase "no text detected" or similar. Always extract or describe something useful.
-- Output ONLY the JSON object. No explanation, no preamble, no commentary.` }
+OUTPUT:
+- Only the transcribed text. Nothing else.
+- If the image has absolutely no text at all (pure scene/photo), respond with exactly: __NO_TEXT__` }
       ]
     }]
   };
   const data = await callClaude(body);
-  const raw = (data.content||[]).filter(x => x.type==='text').map(x => x.text).join('\n').trim();
-  let parsed;
-  try {
-    const cleaned = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
-    parsed = JSON.parse(cleaned);
-  } catch (e) {
-    parsed = { content_type:'other', language:'und', title:null, has_text: !!raw, blocks:[], plain_text: raw || '', description: raw ? '' : 'Could not parse response', key_fields: {} };
-  }
-  // normalize
-  parsed.plain_text = (parsed.plain_text || '').trim();
-  parsed.description = (parsed.description || '').trim();
-  parsed.title = parsed.title || null;
-  parsed.content_type = parsed.content_type || 'other';
-  parsed.blocks = Array.isArray(parsed.blocks) ? parsed.blocks : [];
-  parsed.key_fields = parsed.key_fields && typeof parsed.key_fields === 'object' ? parsed.key_fields : {};
-  return parsed;
+  return (data.content||[]).filter(x => x.type==='text').map(x => x.text).join('\n').trim();
 }
 
-/* Fallback: force a plain-text rich description when structured OCR returns nothing */
-async function describeImage(page) {
-  const ocrDataUrl = await prepareOcrImage(page);
-  const base64 = ocrDataUrl.split(',')[1];
+/* STAGE 2: Lightweight metadata. Small call, small budget, cannot damage text. */
+async function analyzeMetadata(base64, hasText) {
+  const body = {
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 800,
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
+        { type: "text", text:
+`Analyze this image. Return ONLY a JSON object (no markdown fences, no commentary) with this schema:
+{
+  "content_type": "document|receipt|invoice|form|handwritten|whiteboard|screenshot|book|card|sign|diagram|chart|photo_with_text|scene|other",
+  "language": "ISO 639-1 code, 'mixed', or 'und'",
+  "title": "short 3-8 word descriptive title",
+  "key_fields": { }
+}
+For key_fields: include ONLY when the image is a receipt / invoice / form / card / ID. Relevant keys may include: sender, recipient, date, invoice_number, total, currency, due_date, account_number, name, phone, email, address, amount. Skip fields that aren't visible. Omit key_fields entirely if not applicable.` }
+      ]
+    }]
+  };
+  try {
+    const data = await callClaude(body);
+    const raw = (data.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n').trim();
+    const cleaned = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    return { content_type: hasText ? 'document' : 'other', language: 'und', title: null, key_fields: {} };
+  }
+}
+
+/* STAGE 3: Scene description fallback for images with no extractable text. */
+async function describeScene(base64) {
   const body = {
     model: "claude-sonnet-4-20250514",
     max_tokens: 1500,
@@ -805,23 +932,58 @@ async function describeImage(page) {
       content: [
         { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
         { type: "text", text:
-`Describe everything you can see in this image in rich, concrete detail. Even if the image is blurry, dim, angled, low-resolution, or hard to read, you must still provide useful output.
+`Describe everything you see in this image in rich, concrete detail. Even if blurry, dim, angled, or low-resolution, still produce useful output.
 
-Include:
-- What the image shows overall (subject, setting, context — e.g., "a phone photo of a laptop screen running Notepad++ with JavaScript code visible").
-- Any text, numbers, or symbols you can make out — even partial or uncertain ones. When unsure, guess and mark with (?).
-- Notable objects, colors, layout, visible UI elements.
+Cover: the overall subject, setting, and context; any partial text or symbols (mark uncertain ones with ?); notable objects, people, colors, layout, and UI elements.
 
-Respond in plain text. No JSON, no markdown fences, no preamble, no apology. Just the description.` }
+Plain text only. No JSON, no markdown, no preamble, no apology.` }
       ]
     }]
   };
   try {
     const data = await callClaude(body);
     return (data.content||[]).filter(x => x.type==='text').map(x => x.text).join('\n').trim();
-  } catch (e) {
-    return '';
+  } catch (e) { return ''; }
+}
+
+/* Main extraction pipeline — combines all stages and returns the unified structure. */
+async function extractPage(page) {
+  const dataUrl = await prepareOcrImage(page);
+  const base64 = dataUrl.split(',')[1];
+
+  // Stage 1: full transcription
+  let text = '';
+  try {
+    text = await transcribeText(base64);
+  } catch (err) {
+    // try once more
+    text = await transcribeText(base64);
   }
+
+  const hasText = text && text !== '__NO_TEXT__' && text.length > 0;
+
+  // Stage 2: metadata (run in parallel-ish, but keep sequential for simplicity and rate limits)
+  let meta = { content_type: hasText ? 'document' : 'other', language: 'und', title: null, key_fields: {} };
+  try {
+    meta = await analyzeMetadata(base64, hasText);
+  } catch (err) { /* keep defaults */ }
+
+  // Stage 3: fallback description only when there's genuinely no text
+  let description = '';
+  if (!hasText) {
+    try { description = await describeScene(base64); } catch (err) { description = ''; }
+  }
+
+  return {
+    plain_text: hasText ? text : '',
+    description,
+    has_text: !!hasText,
+    content_type: meta.content_type || (hasText ? 'document' : 'other'),
+    language: meta.language || 'und',
+    title: meta.title || null,
+    blocks: [],
+    key_fields: (meta.key_fields && typeof meta.key_fields === 'object') ? meta.key_fields : {},
+  };
 }
 
 /* log */
@@ -916,27 +1078,9 @@ async function process() {
   let done = 0;
   for (const page of state.pages) {
     page.status = 'running';
-    log(`Page ${done+1} → analyzing image…`);
+    log(`Page ${done+1} → transcribing text…`);
     try {
-      let structured = await ocrPage(page);
-      // retry once if result is suspiciously empty
-      let isEmpty = !structured.plain_text && !structured.description && !structured.blocks.length;
-      if (isEmpty) {
-        log(`Page ${done+1} · empty result, retrying…`);
-        structured = await ocrPage(page);
-        isEmpty = !structured.plain_text && !structured.description && !structured.blocks.length;
-      }
-      // final fallback: force a rich plain-text description
-      if (isEmpty) {
-        log(`Page ${done+1} · running describe-image fallback…`);
-        const desc = await describeImage(page);
-        if (desc) {
-          structured.description = desc;
-          structured.has_text = false;
-          structured.content_type = structured.content_type || 'other';
-          structured.title = structured.title || 'Image description';
-        }
-      }
+      const structured = await extractPage(page);
       page.structured = structured;
       page.text = structured.plain_text || '';
       page.status = 'done';
@@ -991,6 +1135,12 @@ function stamp() { return new Date().toISOString().slice(0,19).replace(/[:T]/g,'
 
 /* wiring */
 $('btn-start').addEventListener('click', startCamera);
+$('btn-upload').addEventListener('click', openFilePicker);
+$('btn-upload-more').addEventListener('click', openFilePicker);
+$('file-input').addEventListener('change', (e) => {
+  const files = Array.from(e.target.files || []);
+  if (files.length) handleUploadedFiles(files);
+});
 $('btn-shutter').addEventListener('click', capture);
 $('btn-cancel').addEventListener('click', () => {
   stopCamera();

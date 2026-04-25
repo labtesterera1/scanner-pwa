@@ -108,6 +108,7 @@
   .proc-log .line .t { color: var(--text-dim); margin-right: 8px; }
   .proc-log .line.ok { color: var(--accent); }
   .proc-log .line.err { color: var(--danger); }
+  .proc-log .line.dim { color: var(--text-dim); font-size: 10px; padding-left: 24px; }
   .progress { height: 2px; background: var(--line); margin-top: 16px; overflow: hidden; }
   .progress .bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; box-shadow: 0 0 8px var(--accent); }
 
@@ -157,6 +158,22 @@
   .modal-body .notice { margin-top: 18px; padding: 12px 14px; background: var(--surface); border-left: 2px solid var(--warn); font-size: 11px; color: var(--text-muted); line-height: 1.6; }
   .modal-body .notice b { color: var(--warn); font-weight: 600; }
   .modal-body .notice ul { margin: 6px 0 0 18px; }
+
+  .test-results { margin-top: 18px; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line); }
+  .test-results-head { font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 10px; }
+  .test-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-family: var(--mono); font-size: 11px; border-bottom: 1px solid var(--line); }
+  .test-row:last-child { border-bottom: none; }
+  .test-row .name { flex: 0 0 80px; color: var(--text); font-weight: 500; }
+  .test-row .indicator { width: 10px; height: 10px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
+  .test-row.ok .indicator { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .test-row.err .indicator { background: var(--danger); }
+  .test-row.warn .indicator { background: var(--warn); }
+  .test-row.testing .indicator { background: var(--warn); animation: pulse 0.8s ease-in-out infinite; }
+  .test-row .status { flex: 1; color: var(--text-muted); font-size: 10px; }
+  .test-row.ok .status { color: var(--accent); }
+  .test-row.err .status { color: var(--danger); }
+  .test-row.warn .status { color: var(--warn); }
+  .test-row.testing .status { color: var(--warn); }
   .modal-body .notice code { background: var(--bg); padding: 1px 4px; color: var(--accent); font-size: 10px; }
   .modal-foot { padding: 14px 22px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 10px; }
   .connection-badge { display: inline-block; font-size: 9px; padding: 2px 6px; border: 1px solid var(--line-2); color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; margin-left: 6px; vertical-align: middle; }
@@ -301,30 +318,27 @@
 <div class="modal-backdrop" id="settings-modal">
   <div class="modal">
     <div class="modal-head">
-      <h3>Connection <span class="connection-badge" id="conn-badge">ARTIFACT</span></h3>
+      <h3>Connection <span class="connection-badge" id="conn-badge">NOT SET</span></h3>
       <button class="close-btn" id="btn-close-settings">×</button>
     </div>
     <div class="modal-body">
-      <label>API endpoint</label>
-      <input id="cfg-endpoint" placeholder="https://api.anthropic.com/v1/messages" />
-      <div class="hint">Leave as default when testing inside the Claude.ai artifact preview (calls are proxied automatically). For standalone / downloaded use, either: (a) paste your Anthropic API key below, or (b) set this to your own proxy URL.</div>
+      <label>Cloudflare Worker URL</label>
+      <input id="cfg-endpoint" placeholder="https://scanner-proxy.yourname.workers.dev" />
+      <div class="hint">Paste the URL of your deployed Cloudflare Worker. The Worker handles authentication and provider fallback — you don't need any API keys in this browser.</div>
 
-      <label>Anthropic API key <span style="color:var(--text-dim);text-transform:none;letter-spacing:0">(optional)</span></label>
-      <input id="cfg-key" type="password" placeholder="sk-ant-..." autocomplete="off" />
-      <div class="hint">Stored only for this browser session. Sent as <code style="background:var(--bg);padding:1px 4px;color:var(--accent)">x-api-key</code> header. Only fill this if you're running outside the Claude.ai artifact preview.</div>
+      <div id="test-results" class="test-results" style="display:none">
+        <div class="test-results-head">CONNECTION STATUS</div>
+        <div id="test-rows"></div>
+      </div>
 
       <div class="notice">
-        <b>Seeing "Failed to fetch"?</b><br/>
-        The Anthropic API can't be called directly from a browser without proper headers. Your options:
-        <ul>
-          <li>Run this inside the Claude.ai <b>artifact preview</b> (no setup)</li>
-          <li>Paste your API key above (uses <code>anthropic-dangerous-direct-browser-access</code>)</li>
-          <li>Deploy a proxy and put its URL in "API endpoint"</li>
-        </ul>
+        <b>Don't have a Worker yet?</b><br/>
+        See the deployment guide — a free Cloudflare account + a Gemini + a Groq key is all you need. The Worker tries Gemini first, falls back to Groq on rate-limit, resets daily.
       </div>
     </div>
     <div class="modal-foot">
       <button class="btn ghost" id="btn-cancel-settings">Cancel</button>
+      <button class="btn ghost" id="btn-test-connection">⚡ Test connection</button>
       <button class="btn primary" id="btn-save-settings">Save</button>
     </div>
   </div>
@@ -335,7 +349,7 @@
   <div class="sub">OpenCV + PDF.js</div>
 </div>
 <footer>
-  <span>SCANNER // v0.6</span>
+  <span>SCANNER // v0.11 · PROXY</span>
   <span id="footer-status">Ready</span>
 </footer>
 
@@ -373,14 +387,14 @@ function updateClock() {
 setInterval(updateClock, 1000); updateClock();
 
 /* Config management */
-const DEFAULT_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+const DEFAULT_ENDPOINT = '';
 function loadConfig() {
   try {
     const raw = sessionStorage.getItem('scanner_cfg');
     if (raw) {
       const cfg = JSON.parse(raw);
       state.apiEndpoint = cfg.endpoint || DEFAULT_ENDPOINT;
-      state.apiKey = cfg.key || '';
+      state.apiKey = '';
     }
   } catch (e) { /* ignore */ }
   updateConnectionBadge();
@@ -388,45 +402,49 @@ function loadConfig() {
 function saveConfig() {
   try {
     sessionStorage.setItem('scanner_cfg', JSON.stringify({
-      endpoint: state.apiEndpoint, key: state.apiKey,
+      endpoint: state.apiEndpoint,
     }));
   } catch (e) { /* ignore */ }
 }
 function updateConnectionBadge() {
   const b = $('conn-badge'); if (!b) return;
-  const isDefault = state.apiEndpoint === DEFAULT_ENDPOINT;
-  if (!isDefault) { b.textContent = 'PROXY'; b.className = 'connection-badge proxy'; }
-  else if (state.apiKey) { b.textContent = 'API KEY'; b.className = 'connection-badge key'; }
-  else { b.textContent = 'ARTIFACT'; b.className = 'connection-badge'; }
+  if (state.apiEndpoint) { b.textContent = 'PROXY'; b.className = 'connection-badge proxy'; }
+  else { b.textContent = 'NOT SET'; b.className = 'connection-badge key'; }
 }
 
-/* Unified Claude API caller with helpful error handling */
-async function callClaude(body) {
-  const headers = { "Content-Type": "application/json" };
-  if (state.apiKey) {
-    headers["x-api-key"] = state.apiKey;
-    headers["anthropic-version"] = "2023-06-01";
-    headers["anthropic-dangerous-direct-browser-access"] = "true";
+/* Unified proxy API caller — talks to your Cloudflare Worker */
+async function callProxy(imageB64, prompt, mediaType = 'image/jpeg') {
+  if (!state.apiEndpoint || state.apiEndpoint === DEFAULT_ENDPOINT) {
+    throw new Error('No proxy URL set — open ⚙ Settings and paste your Worker URL');
   }
   let res;
   try {
     res = await fetch(state.apiEndpoint, {
       method: "POST",
-      headers,
-      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image_b64: imageB64,
+        prompt: prompt,
+        media_type: mediaType,
+      }),
     });
   } catch (netErr) {
-    // TypeError: Failed to fetch = network/CORS/blocked
-    throw new Error('Network/CORS blocked — open ⚙ Settings and add an API key or proxy URL');
+    throw new Error('Network/CORS blocked — check Worker URL in ⚙ Settings');
   }
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '');
-    if (res.status === 401) throw new Error('401 Unauthorized — check API key in ⚙ Settings');
-    if (res.status === 403) throw new Error('403 Forbidden — API key lacks permission');
-    if (res.status === 429) throw new Error('429 Rate limit — wait a moment and retry');
-    throw new Error(`API ${res.status}: ${errText.slice(0,140)}`);
+  let data;
+  try { data = await res.json(); } catch (e) {
+    throw new Error(`Bad response from proxy (HTTP ${res.status})`);
   }
-  return await res.json();
+  if (!res.ok || !data.ok) {
+    if (data.error === 'All providers failed' && Array.isArray(data.details)) {
+      throw new Error('All providers failed: ' + data.details.join(' | '));
+    }
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
+  return {
+    text: data.text || '',
+    provider: data.provider || 'unknown',
+  };
 }
 
 function updatePageCount() {
@@ -842,8 +860,38 @@ function resizeDataUrl(dataUrl, targetLong = 1600) {
       const c = document.createElement('canvas');
       c.width = Math.round(img.width * scale);
       c.height = Math.round(img.height * scale);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
       resolve(c.toDataURL('image/jpeg', 0.92));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+/* Upscale small images to a minimum long-edge so OCR has enough pixels.
+   Small screenshots (~400-800px) regularly under-read without this step. */
+function ensureMinimumSize(dataUrl, minLong = 1400) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const long = Math.max(img.width, img.height);
+      if (long >= minLong) { resolve(dataUrl); return; }
+      const scale = minLong / long;
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/jpeg', 0.95));
     };
     img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
@@ -854,135 +902,84 @@ function resizeDataUrl(dataUrl, targetLong = 1600) {
    (NEVER send the user's stylistic filter — that can destroy text) */
 async function prepareOcrImage(page) {
   const rotated = await applyFilter(page.originalDataUrl, 'original', page.rotation);
-  // Send higher resolution (2000px) — better accuracy on dense text
-  return resizeDataUrl(rotated.dataUrl, 2000);
+  // Upscale small images (e.g. UI screenshots ~500px) so small text survives
+  const upscaled = await ensureMinimumSize(rotated.dataUrl, 1400);
+  // Cap very large images
+  return resizeDataUrl(upscaled, 2200);
 }
 
-/* STAGE 1: Transcribe ALL text. Pure text output, no JSON, high token budget.
-   This is the primary content — it can never be lost to JSON truncation. */
-async function transcribeText(base64) {
-  const body = {
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 8192,
-    messages: [{
-      role: "user",
-      content: [
-        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
-        { type: "text", text:
-`Your ONLY job: transcribe EVERY piece of visible text from this image, exactly as it appears.
-
-HARD RULES:
-- Transcribe every word, number, symbol, URL, email, phone number, date, code, label, caption, watermark, stamp, signature block, table cell, footer, header, list bullet — everything.
-- Preserve original reading order (top-to-bottom, left-to-right for columns).
-- Preserve line breaks, paragraph breaks, indentation, and list structure.
-- For tables, align columns with spaces or tabs so the structure survives.
-- For handwriting, transcribe your best reading; mark unclear words with (?) only when truly unreadable.
-- Do NOT summarize. Do NOT paraphrase. Do NOT omit repeated content. Do NOT add commentary, preamble, markdown code fences, quotes, or headers like "Transcription:".
-- If the image is a multi-column layout (e.g., newspaper, invoice), transcribe column by column in reading order.
-- If the image is code/source code, preserve indentation and special characters exactly.
-
-OUTPUT:
-- Only the transcribed text. Nothing else.
-- If the image has absolutely no text at all (pure scene/photo), respond with exactly: __NO_TEXT__` }
-      ]
-    }]
-  };
-  const data = await callClaude(body);
-  return (data.content||[]).filter(x => x.type==='text').map(x => x.text).join('\n').trim();
-}
-
-/* STAGE 2: Lightweight metadata. Small call, small budget, cannot damage text. */
-async function analyzeMetadata(base64, hasText) {
-  const body = {
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 800,
-    messages: [{
-      role: "user",
-      content: [
-        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
-        { type: "text", text:
-`Analyze this image. Return ONLY a JSON object (no markdown fences, no commentary) with this schema:
-{
-  "content_type": "document|receipt|invoice|form|handwritten|whiteboard|screenshot|book|card|sign|diagram|chart|photo_with_text|scene|other",
-  "language": "ISO 639-1 code, 'mixed', or 'und'",
-  "title": "short 3-8 word descriptive title",
-  "key_fields": { }
-}
-For key_fields: include ONLY when the image is a receipt / invoice / form / card / ID. Relevant keys may include: sender, recipient, date, invoice_number, total, currency, due_date, account_number, name, phone, email, address, amount. Skip fields that aren't visible. Omit key_fields entirely if not applicable.` }
-      ]
-    }]
-  };
-  try {
-    const data = await callClaude(body);
-    const raw = (data.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n').trim();
-    const cleaned = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
-    return JSON.parse(cleaned);
-  } catch (e) {
-    return { content_type: hasText ? 'document' : 'other', language: 'und', title: null, key_fields: {} };
-  }
-}
-
-/* STAGE 3: Scene description fallback for images with no extractable text. */
-async function describeScene(base64) {
-  const body = {
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 1500,
-    messages: [{
-      role: "user",
-      content: [
-        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
-        { type: "text", text:
-`Describe everything you see in this image in rich, concrete detail. Even if blurry, dim, angled, or low-resolution, still produce useful output.
-
-Cover: the overall subject, setting, and context; any partial text or symbols (mark uncertain ones with ?); notable objects, people, colors, layout, and UI elements.
-
-Plain text only. No JSON, no markdown, no preamble, no apology.` }
-      ]
-    }]
-  };
-  try {
-    const data = await callClaude(body);
-    return (data.content||[]).filter(x => x.type==='text').map(x => x.text).join('\n').trim();
-  } catch (e) { return ''; }
-}
-
-/* Main extraction pipeline — combines all stages and returns the unified structure. */
+/* SINGLE simple OCR call via Cloudflare Worker proxy */
 async function extractPage(page) {
   const dataUrl = await prepareOcrImage(page);
   const base64 = dataUrl.split(',')[1];
+  const imgKb = Math.round(base64.length * 0.75 / 1024);
 
-  // Stage 1: full transcription
-  let text = '';
-  try {
-    text = await transcribeText(base64);
-  } catch (err) {
-    // try once more
-    text = await transcribeText(base64);
+  // Figure out dimensions of prepared image
+  const dims = await new Promise((resolve) => {
+    const im = new Image();
+    im.onload = () => resolve({ w: im.width, h: im.height });
+    im.onerror = () => resolve({ w: 0, h: 0 });
+    im.src = dataUrl;
+  });
+  log(`  prep: ${dims.w}×${dims.h}px, ${imgKb} KB`, 'dim');
+
+  const prompt =
+`Read all text visible in this image and output it exactly as it appears. Preserve line breaks, reading order, and layout (use spaces to align table columns). Include every visible letter, number, symbol, label, button, caption, and highlighted or colored text. Do not summarize, paraphrase, or add commentary.
+
+If the image contains no text at all, briefly describe what you see instead.
+
+Output only the text (or description). No preamble, no markdown fences, no quotes around the output.`;
+
+  // Call proxy with one retry on failure
+  let result = null;
+  let lastErr = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      result = await callProxy(base64, prompt, 'image/jpeg');
+      break;
+    } catch (err) {
+      lastErr = err;
+      log(`  attempt ${attempt+1} failed: ${err.message}`, 'err');
+    }
+  }
+  if (!result) throw lastErr || new Error('Proxy call failed');
+
+  const rawText = (result.text || '').trim();
+  const provider = result.provider || 'unknown';
+
+  // Diagnostic log
+  log(`  resp: ${rawText.length} chars · via ${provider}`, 'dim');
+  if (rawText.length > 0) {
+    log(`  "${rawText.slice(0, 90).replace(/\s+/g, ' ')}${rawText.length > 90 ? '…' : ''}"`, 'dim');
+  } else {
+    log(`  (EMPTY RESPONSE from ${provider})`, 'err');
   }
 
-  const hasText = text && text !== '__NO_TEXT__' && text.length > 0;
+  // Infer content type
+  let contentType = 'document';
+  if (!rawText) contentType = 'empty';
+  else if (rawText.length < 40 && /^[A-Za-z].* .* .*$/.test(rawText)) contentType = 'photo_with_text';
 
-  // Stage 2: metadata (run in parallel-ish, but keep sequential for simplicity and rate limits)
-  let meta = { content_type: hasText ? 'document' : 'other', language: 'und', title: null, key_fields: {} };
-  try {
-    meta = await analyzeMetadata(base64, hasText);
-  } catch (err) { /* keep defaults */ }
-
-  // Stage 3: fallback description only when there's genuinely no text
-  let description = '';
-  if (!hasText) {
-    try { description = await describeScene(base64); } catch (err) { description = ''; }
+  // Simple title extraction: first non-empty line, max 60 chars
+  let title = null;
+  if (rawText) {
+    const firstLine = rawText.split('\n').map(s => s.trim()).find(Boolean);
+    if (firstLine) title = firstLine.length > 60 ? firstLine.slice(0, 57) + '…' : firstLine;
   }
 
   return {
-    plain_text: hasText ? text : '',
-    description,
-    has_text: !!hasText,
-    content_type: meta.content_type || (hasText ? 'document' : 'other'),
-    language: meta.language || 'und',
-    title: meta.title || null,
+    plain_text: rawText,
+    description: '',
+    has_text: rawText.length > 0,
+    content_type: contentType,
+    language: 'und',
+    title,
+    provider,
     blocks: [],
-    key_fields: (meta.key_fields && typeof meta.key_fields === 'object') ? meta.key_fields : {},
+    key_fields: {},
+    _raw_preview: rawText.slice(0, 80).replace(/\s+/g, ' '),
+    _dims: `${dims.w}×${dims.h}`,
+    _img_kb: imgKb,
   };
 }
 
@@ -1089,7 +1086,9 @@ async function process() {
       const hint = structured.has_text && wc
         ? `${wc} words`
         : (structured.description ? 'described' : 'empty');
-      log(`Page ${done+1} ✓ ${kind} · ${hint} · ${structured.language||'und'}`, 'ok');
+      const providerTag = structured.provider ? ` · via ${structured.provider}` : '';
+      const preview = structured._raw_preview ? ` · "${structured._raw_preview}${structured.plain_text && structured.plain_text.length > 80 ? '…' : ''}"` : '';
+      log(`Page ${done+1} ✓ ${kind} · ${hint}${providerTag}${preview}`, 'ok');
     } catch (err) {
       console.error(err); page.text = ''; page.status = 'error';
       log(`Page ${done+1} ✗ ${err.message}`, 'err');
@@ -1171,8 +1170,7 @@ document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () =
 
 /* Settings modal */
 function openSettings() {
-  $('cfg-endpoint').value = state.apiEndpoint === DEFAULT_ENDPOINT ? '' : state.apiEndpoint;
-  $('cfg-key').value = state.apiKey;
+  $('cfg-endpoint').value = state.apiEndpoint || '';
   $('settings-modal').classList.add('open');
 }
 function closeSettings() { $('settings-modal').classList.remove('open'); }
@@ -1180,12 +1178,153 @@ $('btn-settings').addEventListener('click', openSettings);
 $('btn-close-settings').addEventListener('click', closeSettings);
 $('btn-cancel-settings').addEventListener('click', closeSettings);
 $('btn-save-settings').addEventListener('click', () => {
-  state.apiEndpoint = ($('cfg-endpoint').value || '').trim() || DEFAULT_ENDPOINT;
-  state.apiKey = ($('cfg-key').value || '').trim();
+  state.apiEndpoint = ($('cfg-endpoint').value || '').trim();
+  state.apiKey = '';
   saveConfig(); updateConnectionBadge(); closeSettings();
-  toast('Settings saved');
+  toast(state.apiEndpoint ? 'Worker URL saved' : 'Worker URL cleared');
 });
 $('settings-modal').addEventListener('click', (e) => { if (e.target.id === 'settings-modal') closeSettings(); });
+
+/* ====== Test Connection ====== */
+
+// 96x96 PNG with "OK" text — small enough to use minimal quota, large enough that
+// every vision provider (Gemini, Groq Llama 4) will accept it without errors.
+const TEST_IMAGE_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAAABxUlEQVR42u3cMY6CQBTGcdDttZ4jaGGQRjOl3sPS81iYmBhDbDyDBlu1MKH0AjR22JghNG+LSegWzO4G2eX/VQzQ8MubF5hMcEXEIV+nBQFAAAEEEEAAAQQQAQgggAACCCCAACIAAQQQQAABBBBABCCAAALonfkovuy6bhMUCra4UEE/q6BS4L+e0ilCBdGkAQIIIIAAAug3EgSB7/vj8dj3/e12a092u117EMex53n3+712b9kFeeWeF7Pf77XWSZKISJIkWuswDEWk0+mIiDFGa325XKTalD5gdUCTyeR8PufD0+k0nU5zoNlstl6vpfLUCEgpZYzJh8YYpZQFWiwW8/lc3pHSB2y9cWrb76Asy5bLZe1aT/VNutfrRVGUD6Mo6vf7juO02+3r9fp8PlerVU2XQqqZYofDQWv9eDzyJn08HvMeFMexUup2uzW3B4nIZrPxPG80Gg2HwyAI7EkLJCK73W4wGKRpWisgt3itx7aJf78exIoinxoAAQQQQAABRAACCCCAAAIIoObkpf1BDdlnRgV9Jy5/oKKCAAIIIIAAAgggAhBAAAEEEEAAAUQAAggggAACCCCACEAAAQQQQDXOJ352V3ycNt+EAAAAAElFTkSuQmCC';
+const TEST_PROMPT = 'Reply with the single word OK.';
+
+async function testProvider(providerName) {
+  // Force the Worker to use a specific provider by temporarily setting PRIORITY
+  // via a query string the Worker doesn't understand — instead we just do
+  // two normal calls and infer from the `provider` field which one responded.
+  // Easier path: send one call, check what comes back.
+  const url = state.apiEndpoint;
+  if (!url) throw new Error('No Worker URL set');
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      image_b64: TEST_IMAGE_B64,
+      prompt: TEST_PROMPT,
+      media_type: 'image/png',
+      _test_only: providerName,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok && data.ok, data, status: res.status };
+}
+
+async function runConnectionTest() {
+  const url = ($('cfg-endpoint').value || state.apiEndpoint || '').trim();
+  if (!url) {
+    toast('Enter a Worker URL first', true);
+    return;
+  }
+  // Save URL temporarily so testProvider sees it
+  const prevUrl = state.apiEndpoint;
+  state.apiEndpoint = url;
+
+  const panel = $('test-results');
+  const rows = $('test-rows');
+  panel.style.display = 'block';
+  rows.innerHTML = `
+    <div class="test-row testing" id="row-worker"><span class="indicator"></span><span class="name">Worker</span><span class="status">checking…</span></div>
+    <div class="test-row testing" id="row-gemini"><span class="indicator"></span><span class="name">Gemini</span><span class="status">waiting</span></div>
+    <div class="test-row testing" id="row-groq"><span class="indicator"></span><span class="name">Groq</span><span class="status">waiting</span></div>
+  `;
+
+  const setRow = (id, kind, msg) => {
+    const row = $(id);
+    if (!row) return;
+    row.classList.remove('testing','ok','err');
+    row.classList.add(kind);
+    row.querySelector('.status').textContent = msg;
+  };
+
+  // Step 1: worker reachable?
+  try {
+    const probe = await fetch(url, { method: 'GET' });
+    if (probe.ok || probe.status === 405) {
+      setRow('row-worker', 'ok', 'reachable');
+    } else {
+      setRow('row-worker', 'err', `HTTP ${probe.status}`);
+      setRow('row-gemini', 'err', 'worker unreachable');
+      setRow('row-groq', 'err', 'worker unreachable');
+      state.apiEndpoint = prevUrl;
+      return;
+    }
+  } catch (e) {
+    setRow('row-worker', 'err', 'unreachable / wrong URL');
+    setRow('row-gemini', 'err', 'skipped');
+    setRow('row-groq', 'err', 'skipped');
+    state.apiEndpoint = prevUrl;
+    return;
+  }
+
+  // Step 2: real OCR call — see who answers
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image_b64: TEST_IMAGE_B64,
+        prompt: TEST_PROMPT,
+        media_type: 'image/png',
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (data.ok && data.provider) {
+      // The provider that answered first is OK; the other we infer from previous failure log
+      if (data.provider === 'gemini') {
+        setRow('row-gemini', 'ok', 'responding');
+        setRow('row-groq', 'ok', 'standby (not tested)');
+      } else if (data.provider === 'groq') {
+        setRow('row-gemini', 'err', 'down (Groq took over)');
+        setRow('row-groq', 'ok', 'responding');
+      } else {
+        setRow('row-gemini', 'ok', `responded via ${data.provider}`);
+        setRow('row-groq', 'ok', 'standby');
+      }
+    } else if (data.error === 'All providers failed' && Array.isArray(data.details)) {
+      // Parse the per-provider error list
+      const errMap = {};
+      data.details.forEach(d => {
+        const m = d.match(/^(\w+):\s*(.+)$/);
+        if (m) errMap[m[1]] = m[2];
+      });
+      ['gemini','groq'].forEach(p => {
+        const msg = errMap[p];
+        if (!msg) {
+          setRow('row-' + p, 'err', 'no response');
+        } else if (/skipped/i.test(msg)) {
+          // Daily-reset skip — provider will be re-tried after midnight UTC. Not a real error.
+          setRow('row-' + p, 'warn', 'paused until UTC midnight (daily reset)');
+        } else if (/quota|429|rate.?limit|exceed/i.test(msg)) {
+          setRow('row-' + p, 'err', 'quota exhausted — wait for daily reset');
+        } else if (/decommission|deprec|unknown.?model/i.test(msg)) {
+          setRow('row-' + p, 'err', 'model deprecated — update worker.js');
+        } else if (/no .*_API_KEY/i.test(msg)) {
+          setRow('row-' + p, 'err', 'API key not set in Worker secrets');
+        } else if (/401|unauthor/i.test(msg)) {
+          setRow('row-' + p, 'err', 'invalid API key');
+        } else {
+          setRow('row-' + p, 'err', msg.slice(0, 60));
+        }
+      });
+    } else {
+      setRow('row-gemini', 'err', 'unknown response');
+      setRow('row-groq', 'err', 'unknown response');
+    }
+  } catch (e) {
+    setRow('row-gemini', 'err', e.message.slice(0, 50));
+    setRow('row-groq', 'err', e.message.slice(0, 50));
+  }
+
+  state.apiEndpoint = prevUrl;
+}
+
+$('btn-test-connection').addEventListener('click', runConnectionTest);
 
 loadConfig();
 updatePageCount();

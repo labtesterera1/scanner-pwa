@@ -1,94 +1,85 @@
-/* ============================================================
-   SCANNER AGENT — Service Worker
-   Caches app shell for offline use. API calls always go to network.
-   ============================================================ */
+// Service worker for Scanner Agent PWA
+// Minimal implementation — required for "Install app" eligibility on Android Chrome.
+// Caches the app shell so the UI loads even with a flaky connection.
+// API calls (to your Cloudflare Worker) always go to the network.
 
-const CACHE_NAME = 'scanner-agent-v1';
-const CACHE_URLS = [
+const CACHE_VERSION = 'scanner-v1';
+const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  'https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500;600&display=swap',
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
 ];
 
-/* Install: cache app shell */
-self.addEventListener('install', event => {
+self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(CACHE_URLS).catch(err => {
-        console.warn('[SW] Some resources failed to cache:', err);
-      });
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_VERSION).then((cache) => {
+      // Pre-cache best-effort — don't fail install if some files aren't reachable yet
+      return Promise.all(
+        APP_SHELL.map((url) =>
+          cache.add(url).catch(() => {
+            console.warn('[sw] failed to cache', url);
+          })
+        )
+      );
+    })
   );
+  self.skipWaiting();
 });
 
-/* Activate: clean up old caches */
-self.addEventListener('activate', event => {
+self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then(keys =>
+    caches.keys().then((keys) =>
       Promise.all(
-        keys
-          .filter(k => k !== CACHE_NAME)
-          .map(k => caches.delete(k))
+        keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k))
       )
-    ).then(() => self.clients.claim())
+    )
   );
+  self.clients.claim();
 });
 
-/* Fetch strategy:
-   - Anthropic API → always network (never cache sensitive data)
-   - Google Fonts / CDN → network-first, fallback to cache
-   - Everything else → cache-first, fallback to network
-*/
-self.addEventListener('fetch', event => {
+self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Never intercept Anthropic API calls
-  if (url.hostname === 'api.anthropic.com') {
-    return; // let browser handle it natively
+  // Never intercept API calls — always go to network
+  if (
+    url.hostname.endsWith('workers.dev') ||
+    url.hostname.includes('api.') ||
+    url.hostname.includes('googleapis.com') ||
+    url.hostname.includes('groq.com') ||
+    url.hostname.includes('anthropic.com')
+  ) {
+    return; // browser handles normally
   }
 
-  // Network-first for CDN resources
-  if (
-    url.hostname === 'cdnjs.cloudflare.com' ||
-    url.hostname === 'fonts.googleapis.com' ||
-    url.hostname === 'fonts.gstatic.com'
-  ) {
+  // Network-first for HTML so updates apply quickly
+  if (event.request.mode === 'navigate' || event.request.destination === 'document') {
     event.respondWith(
       fetch(event.request)
-        .then(response => {
-          if (response && response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-          }
-          return response;
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE_VERSION).then((c) => c.put(event.request, copy));
+          return res;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request).then((c) => c || caches.match('./index.html')))
     );
     return;
   }
 
-  // Cache-first for app shell
+  // Cache-first for static assets (icons, css, scripts)
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request).then(response => {
-        if (response && response.status === 200 && response.type !== 'opaque') {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        }
-        return response;
-      });
+    caches.match(event.request).then((cached) => {
+      return (
+        cached ||
+        fetch(event.request).then((res) => {
+          if (res.ok && res.type === 'basic') {
+            const copy = res.clone();
+            caches.open(CACHE_VERSION).then((c) => c.put(event.request, copy));
+          }
+          return res;
+        })
+      );
     })
   );
-});
-
-/* Handle background sync if needed in future */
-self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
 });

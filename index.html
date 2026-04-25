@@ -2,8 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>SCANNER / / instrument</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>Scanner Agent</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#0c0b09" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Scanner" />
+<meta name="application-name" content="Scanner Agent" />
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -349,7 +361,7 @@
   <div class="sub">OpenCV + PDF.js</div>
 </div>
 <footer>
-  <span>SCANNER // v0.12 · PROXY</span>
+  <span>SCANNER // v0.13 · PWA</span>
   <span id="footer-status">Ready</span>
 </footer>
 
@@ -1307,6 +1319,39 @@ $('btn-test-connection').addEventListener('click', runConnectionTest);
 
 loadConfig();
 updatePageCount();
+
+/* ====== PWA: register service worker + capture install prompt ====== */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch((err) => {
+      console.warn('SW registration failed:', err);
+    });
+  });
+}
+
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Show a small badge that lets the user install
+  const btn = document.createElement('button');
+  btn.id = 'install-pwa-btn';
+  btn.textContent = '⬇ Install app';
+  btn.style.cssText = 'position:fixed;bottom:50px;right:18px;z-index:200;font-family:var(--mono);font-size:11px;letter-spacing:0.08em;text-transform:uppercase;padding:10px 14px;background:var(--accent);color:#0c0b09;border:none;cursor:pointer;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,0.3)';
+  btn.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    if (outcome === 'accepted') btn.remove();
+    deferredInstallPrompt = null;
+  });
+  document.body.appendChild(btn);
+});
+window.addEventListener('appinstalled', () => {
+  const btn = document.getElementById('install-pwa-btn');
+  if (btn) btn.remove();
+  deferredInstallPrompt = null;
+});
 </script>
 </body>
 </html>

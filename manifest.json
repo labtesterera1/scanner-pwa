@@ -1,79 +1,38 @@
 {
   "name": "Scanner Agent",
   "short_name": "Scanner",
-  "description": "Scan documents with your camera. Text is extracted via Claude Vision and embedded into a searchable PDF.",
-  "start_url": "./index.html",
-  "display": "standalone",
-  "background_color": "#0c0b09",
-  "theme_color": "#d4ff3a",
-  "orientation": "portrait",
+  "description": "Capture, read, archive — AI-powered document scanner.",
+  "start_url": "./",
   "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c0b09",
+  "theme_color": "#0c0b09",
   "categories": ["productivity", "utilities"],
   "icons": [
-    {
-      "src": "icons/icon-72.png",
-      "sizes": "72x72",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-128.png",
-      "sizes": "128x128",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-152.png",
-      "sizes": "152x152",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
     {
       "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-384.png",
-      "sizes": "384x384",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ],
-  "screenshots": [
+      "purpose": "any"
+    },
     {
-      "src": "icons/screenshot-mobile.png",
-      "sizes": "390x844",
+      "src": "icons/icon-192-maskable.png",
+      "sizes": "192x192",
       "type": "image/png",
-      "form_factor": "narrow"
-    }
-  ],
-  "shortcuts": [
+      "purpose": "maskable"
+    },
     {
-      "name": "Start Scan",
-      "short_name": "Scan",
-      "description": "Open camera to start scanning",
-      "url": "./index.html",
-      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
+      "src": "icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

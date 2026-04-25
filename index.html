@@ -349,7 +349,7 @@
   <div class="sub">OpenCV + PDF.js</div>
 </div>
 <footer>
-  <span>SCANNER // v0.11 · PROXY</span>
+  <span>SCANNER // v0.12 · PROXY</span>
   <span id="footer-status">Ready</span>
 </footer>
 
@@ -1220,7 +1220,6 @@ async function runConnectionTest() {
     toast('Enter a Worker URL first', true);
     return;
   }
-  // Save URL temporarily so testProvider sees it
   const prevUrl = state.apiEndpoint;
   state.apiEndpoint = url;
 
@@ -1236,7 +1235,7 @@ async function runConnectionTest() {
   const setRow = (id, kind, msg) => {
     const row = $(id);
     if (!row) return;
-    row.classList.remove('testing','ok','err');
+    row.classList.remove('testing','ok','err','warn');
     row.classList.add(kind);
     row.querySelector('.status').textContent = msg;
   };
@@ -1261,64 +1260,44 @@ async function runConnectionTest() {
     return;
   }
 
-  // Step 2: real OCR call — see who answers
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        image_b64: TEST_IMAGE_B64,
-        prompt: TEST_PROMPT,
-        media_type: 'image/png',
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-
-    if (data.ok && data.provider) {
-      // The provider that answered first is OK; the other we infer from previous failure log
-      if (data.provider === 'gemini') {
-        setRow('row-gemini', 'ok', 'responding');
-        setRow('row-groq', 'ok', 'standby (not tested)');
-      } else if (data.provider === 'groq') {
-        setRow('row-gemini', 'err', 'down (Groq took over)');
-        setRow('row-groq', 'ok', 'responding');
+  // Step 2 & 3: independently test each provider
+  for (const provider of ['gemini', 'groq']) {
+    const rowId = 'row-' + provider;
+    setRow(rowId, 'testing', 'testing…');
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_b64: TEST_IMAGE_B64,
+          prompt: TEST_PROMPT,
+          media_type: 'image/png',
+          _force_provider: provider,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.ok && data.provider === provider) {
+        setRow(rowId, 'ok', 'responding');
       } else {
-        setRow('row-gemini', 'ok', `responded via ${data.provider}`);
-        setRow('row-groq', 'ok', 'standby');
-      }
-    } else if (data.error === 'All providers failed' && Array.isArray(data.details)) {
-      // Parse the per-provider error list
-      const errMap = {};
-      data.details.forEach(d => {
-        const m = d.match(/^(\w+):\s*(.+)$/);
-        if (m) errMap[m[1]] = m[2];
-      });
-      ['gemini','groq'].forEach(p => {
-        const msg = errMap[p];
-        if (!msg) {
-          setRow('row-' + p, 'err', 'no response');
-        } else if (/skipped/i.test(msg)) {
-          // Daily-reset skip — provider will be re-tried after midnight UTC. Not a real error.
-          setRow('row-' + p, 'warn', 'paused until UTC midnight (daily reset)');
-        } else if (/quota|429|rate.?limit|exceed/i.test(msg)) {
-          setRow('row-' + p, 'err', 'quota exhausted — wait for daily reset');
-        } else if (/decommission|deprec|unknown.?model/i.test(msg)) {
-          setRow('row-' + p, 'err', 'model deprecated — update worker.js');
-        } else if (/no .*_API_KEY/i.test(msg)) {
-          setRow('row-' + p, 'err', 'API key not set in Worker secrets');
-        } else if (/401|unauthor/i.test(msg)) {
-          setRow('row-' + p, 'err', 'invalid API key');
+        const errMsg = (data.details && data.details[0]) || data.error || `HTTP ${res.status}`;
+        const cleanMsg = errMsg.replace(new RegExp('^' + provider + ':\\s*'), '');
+        if (/quota|429|rate.?limit|exceed/i.test(cleanMsg)) {
+          setRow(rowId, 'warn', 'quota exhausted — wait for daily reset');
+        } else if (/decommission|deprec|unknown.?model|not.?found/i.test(cleanMsg)) {
+          setRow(rowId, 'err', 'model deprecated — update worker.js');
+        } else if (/no .*_API_KEY|secret.?configured/i.test(cleanMsg)) {
+          setRow(rowId, 'err', 'API key not set in Worker secrets');
+        } else if (/401|unauthor|invalid.?api.?key/i.test(cleanMsg)) {
+          setRow(rowId, 'err', 'invalid API key');
+        } else if (/invalid image|image.?data/i.test(cleanMsg)) {
+          setRow(rowId, 'err', 'test image rejected — non-fatal');
         } else {
-          setRow('row-' + p, 'err', msg.slice(0, 60));
+          setRow(rowId, 'err', cleanMsg.slice(0, 60));
         }
-      });
-    } else {
-      setRow('row-gemini', 'err', 'unknown response');
-      setRow('row-groq', 'err', 'unknown response');
+      }
+    } catch (e) {
+      setRow(rowId, 'err', e.message.slice(0, 50));
     }
-  } catch (e) {
-    setRow('row-gemini', 'err', e.message.slice(0, 50));
-    setRow('row-groq', 'err', e.message.slice(0, 50));
   }
 
   state.apiEndpoint = prevUrl;

@@ -343,7 +343,7 @@
         <div id="test-rows"></div>
       </div>
 
-      <div class="notice">
+      <div class="notice" id="no-worker-notice">
         <b>Don't have a Worker yet?</b><br/>
         See the deployment guide — a free Cloudflare account + a Gemini + a Groq key is all you need. The Worker tries Gemini first, falls back to Groq on rate-limit, resets daily.
       </div>
@@ -361,7 +361,7 @@
   <div class="sub">OpenCV + PDF.js</div>
 </div>
 <footer>
-  <span>SCANNER // v0.13 · PWA</span>
+  <span>SCANNER // v0.14 · PWA</span>
   <span id="footer-status">Ready</span>
 </footer>
 
@@ -1183,6 +1183,12 @@ document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () =
 /* Settings modal */
 function openSettings() {
   $('cfg-endpoint').value = state.apiEndpoint || '';
+  // Hide the help notice if user already has a Worker URL configured
+  const notice = $('no-worker-notice');
+  if (notice) notice.style.display = state.apiEndpoint ? 'none' : '';
+  // Hide previous test results when reopening
+  const tr = $('test-results');
+  if (tr) tr.style.display = 'none';
   $('settings-modal').classList.add('open');
 }
 function closeSettings() { $('settings-modal').classList.remove('open'); }

@@ -361,7 +361,7 @@
   <div class="sub">OpenCV + PDF.js</div>
 </div>
 <footer>
-  <span>SCANNER // v0.14 · PWA</span>
+  <span>SCANNER // v0.15 · PWA</span>
   <span id="footer-status">Ready</span>
 </footer>
 
@@ -400,12 +400,45 @@ setInterval(updateClock, 1000); updateClock();
 
 /* Config management */
 const DEFAULT_ENDPOINT = '';
+
+// URLs that should never end up in the endpoint field — direct provider URLs
+// (these only got there from older scanner versions before the proxy redesign)
+const KNOWN_DIRECT_PROVIDER_HOSTS = [
+  'api.anthropic.com',
+  'generativelanguage.googleapis.com',
+  'api.groq.com',
+  'api.mistral.ai',
+  'api.openai.com',
+];
+
+function isValidWorkerUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const u = url.trim();
+  if (!u) return false;
+  if (!/^https?:\/\//i.test(u)) return false;
+  try {
+    const parsed = new URL(u);
+    // Reject direct provider URLs — they're never valid Worker endpoints
+    if (KNOWN_DIRECT_PROVIDER_HOSTS.some(h => parsed.hostname === h || parsed.hostname.endsWith('.' + h))) {
+      console.warn('[scanner] rejecting stale direct-provider URL:', u);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function loadConfig() {
   try {
-    const raw = sessionStorage.getItem('scanner_cfg');
+    // Try localStorage first (survives across browser sessions),
+    // fall back to sessionStorage (older versions used this)
+    const raw = localStorage.getItem('scanner_cfg') || sessionStorage.getItem('scanner_cfg');
     if (raw) {
       const cfg = JSON.parse(raw);
-      state.apiEndpoint = cfg.endpoint || DEFAULT_ENDPOINT;
+      const endpoint = cfg.endpoint || DEFAULT_ENDPOINT;
+      // Only adopt the saved endpoint if it looks like a real Worker URL
+      state.apiEndpoint = isValidWorkerUrl(endpoint) ? endpoint : DEFAULT_ENDPOINT;
       state.apiKey = '';
     }
   } catch (e) { /* ignore */ }
@@ -413,9 +446,10 @@ function loadConfig() {
 }
 function saveConfig() {
   try {
-    sessionStorage.setItem('scanner_cfg', JSON.stringify({
-      endpoint: state.apiEndpoint,
-    }));
+    const data = JSON.stringify({ endpoint: state.apiEndpoint });
+    // Save to BOTH localStorage (persistent) and sessionStorage (legacy)
+    localStorage.setItem('scanner_cfg', data);
+    sessionStorage.setItem('scanner_cfg', data);
   } catch (e) { /* ignore */ }
 }
 function updateConnectionBadge() {
@@ -1196,7 +1230,12 @@ $('btn-settings').addEventListener('click', openSettings);
 $('btn-close-settings').addEventListener('click', closeSettings);
 $('btn-cancel-settings').addEventListener('click', closeSettings);
 $('btn-save-settings').addEventListener('click', () => {
-  state.apiEndpoint = ($('cfg-endpoint').value || '').trim();
+  const newUrl = ($('cfg-endpoint').value || '').trim();
+  if (newUrl && !isValidWorkerUrl(newUrl)) {
+    toast('That looks like a direct API URL, not a Worker URL', true);
+    return;
+  }
+  state.apiEndpoint = newUrl;
   state.apiKey = '';
   saveConfig(); updateConnectionBadge(); closeSettings();
   toast(state.apiEndpoint ? 'Worker URL saved' : 'Worker URL cleared');

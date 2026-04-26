@@ -330,12 +330,12 @@
 <div class="modal-backdrop" id="settings-modal">
   <div class="modal">
     <div class="modal-head">
-      <h3>Connection <span class="connection-badge" id="conn-badge">NOT SET</span></h3>
+      <h3>Connection <span class="connection-badge" id="conn-badge">NOT SET</span> <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim);letter-spacing:0.1em;margin-left:6px">v0.16</span></h3>
       <button class="close-btn" id="btn-close-settings">×</button>
     </div>
     <div class="modal-body">
       <label>Cloudflare Worker URL</label>
-      <input id="cfg-endpoint" placeholder="https://scanner-proxy.yourname.workers.dev" />
+      <input id="cfg-endpoint" type="url" placeholder="https://scanner-proxy.yourname.workers.dev" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="url" />
       <div class="hint">Paste the URL of your deployed Cloudflare Worker. The Worker handles authentication and provider fallback — you don't need any API keys in this browser.</div>
 
       <div id="test-results" class="test-results" style="display:none">
@@ -361,7 +361,7 @@
   <div class="sub">OpenCV + PDF.js</div>
 </div>
 <footer>
-  <span>SCANNER // v0.15 · PWA</span>
+  <span>SCANNER // v0.16 · PWA</span>
   <span id="footer-status">Ready</span>
 </footer>
 
@@ -375,7 +375,7 @@
 const state = {
   pages: [], stream: null, pdfBlob: null, txtBlob: null, allText: '',
   pdfStats: null, currentFilter: 'original', edgeQuad: null, edgeLoopId: null, cvReady: false,
-  apiEndpoint: 'https://api.anthropic.com/v1/messages',
+  apiEndpoint: '',
   apiKey: '',
 };
 const $ = id => document.getElementById(id);
@@ -1216,10 +1216,13 @@ document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () =
 
 /* Settings modal */
 function openSettings() {
-  $('cfg-endpoint').value = state.apiEndpoint || '';
+  // Defensive: only show the URL if it's actually a valid Worker URL.
+  // This prevents stale/bad values from being shown even if state somehow has them.
+  const safeUrl = (state.apiEndpoint && isValidWorkerUrl(state.apiEndpoint)) ? state.apiEndpoint : '';
+  $('cfg-endpoint').value = safeUrl;
   // Hide the help notice if user already has a Worker URL configured
   const notice = $('no-worker-notice');
-  if (notice) notice.style.display = state.apiEndpoint ? 'none' : '';
+  if (notice) notice.style.display = safeUrl ? 'none' : '';
   // Hide previous test results when reopening
   const tr = $('test-results');
   if (tr) tr.style.display = 'none';

@@ -3,7 +3,7 @@
 // Caches the app shell so the UI loads even with a flaky connection.
 // API calls (to your Cloudflare Worker) always go to the network.
 
-const CACHE_VERSION = 'scanner-v1';
+const CACHE_VERSION = 'scanner-v0.16';
 const APP_SHELL = [
   './',
   './index.html',
